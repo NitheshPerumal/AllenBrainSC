@@ -16,20 +16,48 @@ library(UpSetR)
 # Load Data -----------------------------------------------------------------
 
 # Metadata for Allen Brain dataset
-meta <- read.csv("rstudio/metadata.csv",header = TRUE, sep = ',')
+#--# 1) Added the synapse IDs. It is a pain to download the first time but is
+#--# cached after that.
+#--# 2) Added in the data.table::fread to quickly load data frames
+#--# 3) Formatted the expression to samples=columns and rows=features
+
+#_# meta <- read.csv("rstudio/metadata.csv",header = TRUE, sep = ',')
+meta <- data.table::fread(synapser::synGet('syn25883034')$path)
 
 # Gene expression Matrix
-gene_exp <- fread("rstudio/matrix.csv", sep = ',')
+#_# gene_exp <- fread("rstudio/matrix.csv", sep = ',')
+gene_exp <- t(as.matrix(
+  data.table::fread(
+    synapser::synGet('syn25883506')$path
+  ),
+  rownames=1
+))
+
 
 # Analysis -----------------------------------------------------------------
 
 # Parallel Processing Setup
-ncore <- as.numeric(detectCores())
+#--# 1) Added the (#') notation to function description and took out log2
+#--# 2) Referenced package functions implicity with :: (Will explain in 1 on 1)
+#--# 3) Total_cores minus 1 helps to prevent freezes etc.
+ncore <- as.numeric(parallel::detectCores()-1)
+#--# Make the socket cluster
+cl <- parallel::makeCluster(ncore)
 
 # Counts Per Million (CPM) Normalization by sample 
-cpm_exp <- as.data.frame(t(apply(gene_exp[,-1], 1, function(x) (x/sum(x))*1000000)))
-cpm_exp <- cbind(gene_exp[,1], cpm_exp)
-colnames(cpm_exp)[1] = "sample_name"
+#' @parm x column to perform log2 normalization of CPM
+#' @return CPM of variable
+CPM <- function(x){
+  den <- sum(x)
+  x/( den/(10^6) )
+}
+
+cpm_exp <- as.data.frame(parallel::parApply(cl, gene_exp, 2, CPM))
+
+# Counts Per Million (CPM) Normalization by sample 
+#cpm_exp <- as.data.frame(t(apply(gene_exp[,-1], 1, function(x) (x/sum(x))*1000000)))
+#cpm_exp <- cbind(gene_exp[,1], cpm_exp)
+#colnames(cpm_exp)[1] = "sample_name"
 
 remove(gene_exp) # Removing un normalized expression matrix to save memory
 
