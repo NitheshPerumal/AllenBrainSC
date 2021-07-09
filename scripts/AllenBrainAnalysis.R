@@ -16,20 +16,39 @@ library(UpSetR)
 # Load Data -----------------------------------------------------------------
 
 # Metadata for Allen Brain dataset
-meta <- read.csv("rstudio/metadata.csv",header = TRUE, sep = ',')
+#meta <- read.csv("rstudio/metadata.csv",header = TRUE, sep = ',')
+meta <- as.data.frame(data.table::fread(synapser::synGet('syn25883034')$path))
 
 # Gene expression Matrix
-gene_exp <- fread("rstudio/matrix.csv", sep = ',')
+#gene_exp <- read.csv("rstudio/matrix.csv", sep = ',')
+gene_exp <- as.data.frame(data.table::fread(
+    synapser::synGet('syn25883506')$path
+  )
+)
 
 # Analysis -----------------------------------------------------------------
 
 # Parallel Processing Setup
-ncore <- as.numeric(detectCores())
+#ncore <- as.numeric(detectCores()-1)
+#cl <- makeCluster(ncore)
 
 # Counts Per Million (CPM) Normalization by sample 
-cpm_exp <- as.data.frame(t(apply(gene_exp[,-1], 1, function(x) (x/sum(x))*1000000)))
-cpm_exp <- cbind(gene_exp[,1], cpm_exp)
-colnames(cpm_exp)[1] = "sample_name"
+CPM <- function(x){
+  den <- sum(x)/(10^6)
+  x/den
+}
+
+# More efficient but not working
+#cpm_exp <- as.data.frame(t(parallel::parApply(cl, gene_exp[,-1], 1, CPM)))
+#stopCluster(cl)
+
+# Less Efficient but working
+#cpm_exp <- as.data.frame(t(apply(gene_exp[,-1], 1, CPM)))
+#cpm_exp <- cbind(gene_exp[,1], cpm_exp)
+#colnames(cpm_exp)[1] = "sample_name"
+
+# Getting Normalized data from Synapse
+cpm_exp <- as.data.frame(data.table::fread(synapser::synGet('syn25976164')$path))
 
 remove(gene_exp) # Removing un normalized expression matrix to save memory
 
@@ -159,7 +178,6 @@ hist(composition$Unlabelled[composition$Unlabelled != 0])
 hist(composition$Excitatory[composition$Excitatory != 0])
 
 # UpSet Plot
-library(UpSetR)
 ups <- features_med
 ups[ups > 0] <- 1
 
@@ -183,6 +201,23 @@ folder_loc = 'syn25881691'
 activity <- synGet('syn25881691')
 activityName = 'Allen Brain Data Analysis'
 activityDescription = 'Single Cell analysis of Allen Brain Data'
+
+
+# Counts Table for Broad Cell type per Brain Regions
+write.csv(cpm_exp,
+          file = 'CPM_Normalized.csv',
+          quote = FALSE
+)
+
+CPM_dat <- synStore( File(
+  path = 'CPM_Normalized.csv',
+  name = 'CPM Normalized Gene Expression Matrix',
+  parentId = activity$properties$id),
+  activityName = activityName,
+  activityDescription = activityDescription
+)
+#synapser::synSetAnnotations(CountsTable, annotations = all.annotations)
+file.remove('CPM_Normalized.csv')
 
 
 # Counts Table for Broad Cell type per Brain Regions
