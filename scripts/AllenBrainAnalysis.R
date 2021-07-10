@@ -95,13 +95,18 @@ remove(non_neuronal)
 # Removing missing features if 50% or more instances are <= 1 CPM
 # @param x datframe of gene expression matrix
 # @return pruned dataframe of gene expression matrix with missing features removed
+remove(cpm_exp)
+remove(meta)
+ncore <- as.numeric(detectCores()-1)
+
 rm_missing <- function(x){
+  
   #count <- apply(x,2, function(x) sum(x <= 1))
-  count <- mclapply(x,function(x) sum(x <= 1))
+  count <- parApply(cl,x, 2,function(x) sum(x <= 1))
   pruned <- x[ , -which(names(x) %in% names(which(count >= 0.5*nrow(x))))]
   return(pruned)
 }
-
+cl <- makeForkCluster(ncore)
 
 excit_data_rm <- rm_missing(excit_data)
 inhib_data_rm <- rm_missing(inhib_data)
