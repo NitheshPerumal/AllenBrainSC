@@ -74,44 +74,52 @@ cell_type_sub <- as.data.frame.matrix(xtabs(formula = ~cell_type_accession_label
 unlabelled <- subset(meta, class_label == "") # Unlabelled samples
 inhibitory <- subset(meta, class_label == "GABAergic") # Inhibitory samples
 excitatory <- subset(meta, class_label == "Glutamatergic") # Excitatory samples
-non_neuronal <- subset(meta, class_label == "Non-neuronal") # Non-neuronal samples
+astro <- subset(meta, subclass_label == 'Astrocyte') # Astrocyte samples
+oligo <- subset(meta, subclass_label == 'Oligodendrocyte') # Oligodendrocytes samples
+opc <- subset(meta, subclass_label == 'OPC') # Oligo Precursor Cells samples
+microglia <- subset(meta, subclass_label == 'Microglia') # Microglia samples
+#non_neuronal <- subset(meta, class_label == "Non-neuronal") # Non-neuronal samples
 
-# Double checking that all the data is accounted for
-nrow(meta) == nrow(unlabelled) + nrow(inhibitory) + nrow(excitatory) + nrow(non_neuronal)
 
 # Subsetting the gene expression matrix by Broad Cell Type
 unlab_data <- semi_join(cpm_exp, unlabelled, by = 'sample_name') # Unlabelled Gene exp
 inhib_data <- semi_join(cpm_exp, inhibitory, by = 'sample_name') # Inhibitory Gene exp
 excit_data <- semi_join(cpm_exp, excitatory, by = 'sample_name') # Excitatory Gene exp
-non_data <- semi_join(cpm_exp, non_neuronal, by = 'sample_name') # Non-neuronal Gene exp
+astro_data <- semi_join(cpm_exp, astro, by = 'sample_name')
+oligo_data <- semi_join(cpm_exp, oligo, by = 'sample_name')
+opc_data <- semi_join(cpm_exp, opc, by = 'sample_name')
+microglia_data <- semi_join(cpm_exp, microglia, by = 'sample_name')
+#non_data <- semi_join(cpm_exp, non_neuronal, by = 'sample_name') # Non-neuronal Gene exp
 
 # Remvoing un-needed data to free up memory
 remove(unlabelled)
 remove(inhibitory)
 remove(excitatory)
-remove(non_neuronal)
-
+remove(astro)
+remove(oligo)
+remove(opc)
+remove(microglia)
+#remove(non_neuronal)
 
 # Removing missing features if 50% or more instances are <= 1 CPM
 # @param x datframe of gene expression matrix
 # @return pruned dataframe of gene expression matrix with missing features removed
-remove(cpm_exp)
-remove(meta)
-ncore <- as.numeric(detectCores()-1)
-
 rm_missing <- function(x){
   
-  #count <- apply(x,2, function(x) sum(x <= 1))
-  count <- parApply(cl,x, 2,function(x) sum(x <= 1))
+  count <- apply(x,2, function(x) sum(x <= 1))
+  #count <- parApply(cl,x, 2,function(x) sum(x <= 1))
   pruned <- x[ , -which(names(x) %in% names(which(count >= 0.5*nrow(x))))]
   return(pruned)
 }
-cl <- makeForkCluster(ncore)
 
 excit_data_rm <- rm_missing(excit_data)
 inhib_data_rm <- rm_missing(inhib_data)
 unlab_data_rm <- rm_missing(unlab_data)
-non_data_rm <- rm_missing(non_data)
+astro_data_rm <- rm_missing(astro_data)
+oligo_data_rm <- rm_missing(oligo_data)
+opc_data_rm <- rm_missing(opc_data)
+microglia_data_rm <- rm_missing(microglia_data)
+#non_data_rm <- rm_missing(non_data)
 
 # Summary Statistics for each Broad Cell type category
 # Function to replace the -Inf with 0
@@ -126,8 +134,8 @@ inf <- function(x){
 # @param x dataframe of gene matrix to generate summary statistics for
 # @return out dataframe of summary statistics
 stats <- function(x){
-  y <- apply(x[,-1], 2, FUN = inf)
-  
+  #y <- apply(x[,-1], 2, FUN = inf)
+  y <- x[,c(-1,-2)]
   m <- as.data.frame(apply(y, 2, FUN = mean))
   colnames(m)[1] <- 'mean'
   
@@ -148,12 +156,43 @@ stats <- function(x){
 excit_summary <- stats(excit_data_rm)
 unlab_summary <- stats(unlab_data_rm)
 inhib_summary <- stats(inhib_data_rm)
-non_summary <- stats(non_data_rm)
+astro_summary <- stats(astro_data_rm)
+oligo_summary <- stats(oligo_data_rm)
+opc_summary <- stats(opc_data_rm)
+microglia_summary <- stats(microglia_data_rm)
+#non_summary <- stats(non_data_rm)
 
-hist(excit_summary$diff) # Skewed left
-hist(unlab_summary$diff) # Skewed left
-hist(inhib_summary$diff) # Skewed left
-hist(non_summary$diff) # Looks much more normal
+# Histograms of Mean - Median to decide central tendency to use
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Excit_hist.jpeg')
+hist(excit_summary$diff, main = 'Excitatory Cells Mean - Median', xlab = 'mean - median')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Unlab_hist.jpeg')
+hist(unlab_summary$diff, main = 'Unlabelled Cells Mean - Median', xlab = 'mean - median')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Inhib_hist.jpeg')
+hist(inhib_summary$diff, main = 'Inhibitory Cells Mean - Median', xlab = 'mean - median')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Astro_hist.jpeg')
+hist(astro_summary$diff, main = 'Astrocytes Mean - Median', xlab = 'mean - median')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Oligo_hist.jpeg')
+hist(oligo_summary$diff, main = 'Oligodendrocytes Mean - Median', xlab = 'mean - median')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/OPC_hist.jpeg')
+hist(opc_summary$diff, main = 'Oligo Precrusor Cells Mean - Median', xlab = 'mean - median')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Microglia_hist.jpeg')
+hist(microglia_summary$diff, main = 'Microglia Mean - Median', xlab = 'mean - median')
+dev.off()
+
+#hist(non_summary$diff, main = 'Excitatory Cells Mean - Median', xlab = 'mean - median')
+
 
 # Dataframe with medians of all features by Broad Cell type
 features <- as.data.frame(names(cpm_exp))
@@ -162,25 +201,38 @@ colnames(features)[1] <- 'features'
 
 # Median of features by Broad Cell Type
 inhib_med <- left_join(features, inhib_summary[,c(1,3)], by = 'features')
-non_med <- left_join(features, non_summary[,c(1,3)], by = 'features')
 unlab_med <- left_join(features, unlab_summary[,c(1,3)], by = 'features')
 excit_med <- left_join(features, excit_summary[,c(1,3)], by = 'features')
+astro_med <- left_join(features, astro_summary[,c(1,3)], by = 'features')
+oligo_med <- left_join(features, oligo_summary[,c(1,3)], by = 'features')
+opc_med <- left_join(features, opc_summary[,c(1,3)], by = 'features')
+microglia_med <- left_join(features, microglia_summary[,c(1,3)], by = 'features')
+#non_med <- left_join(features, non_summary[,c(1,3)], by = 'features')
 
-features_med <- cbind(inhib_med, non_med[,2], unlab_med[,2], excit_med[,2])
+features_med <- cbind(inhib_med[,2], unlab_med[,2], excit_med[,2],
+                      astro_med[,2], oligo_med[,2], opc_med[,2],
+                      microglia_med[,2])
+features_med <- log2(features_med)
+features_med <- cbind(features, features_med)
 features_med[is.na(features_med)] <- 0
-colnames(features_med) <- c('features', 'Inhibitory','Nonneuronal','Unlabelled','Excitatory')
+colnames(features_med) <- c('features', 'Inhibitory','Unlabelled','Excitatory',
+                            'Astrocytes', 'Oligodendrocytes', 'OPC', 'Microglia')
 features_med$sum <- apply(features_med[,-1],1, FUN = sum)
 
 # Proportion Composition by Median as Cell Type Score
-composition <- features_med[,c(-1,-6)]/features_med[,6]
+composition <- features_med[,c(-1,-9)]/features_med[,9]
 composition[is.na(composition)] <- 0
 composition <- cbind(features_med[,1], composition)
 colnames(composition)[1] <- 'features'
 
 hist(composition$Inhib[composition$Inhib != 0])
-hist(composition$Nonneuronal[composition$Nonneuronal != 0])
 hist(composition$Unlabelled[composition$Unlabelled != 0])
 hist(composition$Excitatory[composition$Excitatory != 0])
+hist(composition$Astrocytes[composition$Astrocytes != 0])
+hist(composition$Oligodendrocytes[composition$Oligodendrocytes != 0])
+hist(composition$OPC[composition$OPC != 0])
+hist(composition$Microglia[composition$Microglia != 0])
+#hist(composition$Nonneuronal[composition$Nonneuronal != 0])
 
 # UpSet Plot
 ups <- features_med
@@ -188,7 +240,8 @@ ups[ups > 0] <- 1
 
 # Upset plot saved as jpeg
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/UpSet_Broad_Cell_Types.jpeg')
-upset(ups, sets = c('Inhibitory','Nonneuronal','Unlabelled','Excitatory'), order.by = 'freq',
+upset(ups, sets = c('Inhibitory','Unlabelled','Excitatory', 'Astrocytes',
+                    'Oligodendrocytes', 'OPC', 'Microglia'), order.by = 'freq',
       mainbar.y.label = 'Broad Cell Type Intersection', sets.x.label = 'Broad Cell Type') 
 dev.off()
 
@@ -207,6 +260,28 @@ activity <- synGet('syn25881691')
 activityName = 'Allen Brain Data Analysis'
 activityDescription = 'Single Cell analysis of Allen Brain Data'
 
+# Annotations
+all.annotations = list(
+  dataType = c('clinical','geneExpression'),
+  resourceType = 'experimentalData',
+  isModelSystem = 'FALSE',
+  isMultiSpecimen = 'TRUE',
+  fileFormat = 'csv',
+  grant = 'na',
+  species = 'Human',
+  nucleicAcidSource = 'sorted cells',
+  organ = 'brain',
+  tissue = c('middle temporal gyrus',
+             'anterior cingulate cortex',
+             'primary visual cortex',
+             'primary motor cortex',
+             'primary somatosensory cortex',
+             'primary auditory cortex'
+  ),
+  study = c('Allen Institute','Pathway Tracing', 'Treat-AD'), 
+  consortium = 'Allen-Brain',
+  assay = 'SMART-Seq2'
+)
 
 # Counts Table for Broad Cell type per Brain Regions
 write.csv(cpm_exp,
@@ -221,7 +296,7 @@ CPM_dat <- synStore( File(
   activityName = activityName,
   activityDescription = activityDescription
 )
-#synapser::synSetAnnotations(CountsTable, annotations = all.annotations)
+synapser::synSetAnnotations(CPM_dat, annotations = all.annotations)
 file.remove('CPM_Normalized.csv')
 
 
@@ -238,7 +313,7 @@ CountsTable <- synStore( File(
   activityName = activityName,
   activityDescription = activityDescription
 )
-#synapser::synSetAnnotations(CountsTable, annotations = all.annotations)
+synapser::synSetAnnotations(CountsTable, annotations = all.annotations)
 file.remove('Counts_Broad_Type_vs_Brain_Region.csv')
 
 
@@ -255,7 +330,7 @@ Inhib <- synStore( File(
   activityName = activityName,
   activityDescription = activityDescription
 )
-#synapser::synSetAnnotations(Inhib, annotations = all.annotations)
+synapser::synSetAnnotations(Inhib, annotations = all.annotations)
 file.remove('Inhibitory_Cells.csv')
 
 
@@ -272,25 +347,25 @@ Excit <- synStore( File(
   activityName = activityName,
   activityDescription = activityDescription
 )
-#synapser::synSetAnnotations(Excit, annotations = all.annotations)
+synapser::synSetAnnotations(Excit, annotations = all.annotations)
 file.remove('Excitatory_Cells.csv')
 
 
 # Non Neuronal Cell Types
-write.csv(non_data,
-          file = 'Non_Neuronal_Cells.csv',
-          quote = FALSE
-)
+#write.csv(non_data,
+#          file = 'Non_Neuronal_Cells.csv',
+#          quote = FALSE
+#)
 
-Non <- synStore( File(
-  path = 'Non_Neuronal_Cells.csv',
-  name = 'Subset of Non Neuronal Cells from Allen Brain data',
-  parentId = activity$properties$id),
-  activityName = activityName,
-  activityDescription = activityDescription
-)
+#Non <- synStore( File(
+#  path = 'Non_Neuronal_Cells.csv',
+#  name = 'Subset of Non Neuronal Cells from Allen Brain data',
+#  parentId = activity$properties$id),
+# activityName = activityName,
+#  activityDescription = activityDescription
+#)
 #synapser::synSetAnnotations(Non, annotations = all.annotations)
-file.remove('Non_Neuronal_Cells.csv')
+#file.remove('Non_Neuronal_Cells.csv')
 
 
 # Unlabelled Cells
@@ -306,7 +381,7 @@ Unlab <- synStore( File(
   activityName = activityName,
   activityDescription = activityDescription
 )
-#synapser::synSetAnnotations(Unlab, annotations = all.annotations)
+synapser::synSetAnnotations(Unlab, annotations = all.annotations)
 file.remove('Unlabelled_Cells.csv')
 
 
@@ -323,7 +398,7 @@ Unlab_sum <- synStore( File(
   activityName = activityName,
   activityDescription = activityDescription
 )
-#synapser::synSetAnnotations(Unlab, annotations = all.annotations)
+synapser::synSetAnnotations(Unlab_sum, annotations = all.annotations)
 file.remove('Unlabelled_Summary.csv')
 
 
@@ -340,25 +415,25 @@ Inhib_sum <- synStore( File(
   activityName = activityName,
   activityDescription = activityDescription
 )
-#synapser::synSetAnnotations(Unlab, annotations = all.annotations)
+synapser::synSetAnnotations(Inhib_sum, annotations = all.annotations)
 file.remove('Inhib_Summary.csv')
 
 
 # Nonneuronal Cells Feature Summary 
-write.csv(non_summary,
-          file = 'Non_Summary.csv',
-          quote = FALSE
-)
+#write.csv(non_summary,
+#          file = 'Non_Summary.csv',
+#         quote = FALSE
+#)
 
-Non_sum <- synStore( File(
-  path = 'Non_Summary.csv',
-  name = 'Non Neuronal Cells Summary Statistics by Feature',
-  parentId = activity$properties$id),
-  activityName = activityName,
-  activityDescription = activityDescription
-)
-#synapser::synSetAnnotations(Unlab, annotations = all.annotations)
-file.remove('Non_Summary.csv')
+#Non_sum <- synStore( File(
+#  path = 'Non_Summary.csv',
+#  name = 'Non Neuronal Cells Summary Statistics by Feature',
+#  parentId = activity$properties$id),
+#  activityName = activityName,
+#  activityDescription = activityDescription
+#)
+#synapser::synSetAnnotations(Non_sum, annotations = all.annotations)
+#file.remove('Non_Summary.csv')
 
 
 # Percent Composition Data frame
@@ -374,7 +449,7 @@ comp <- synStore( File(
   activityName = activityName,
   activityDescription = activityDescription
 )
-#synapser::synSetAnnotations(Unlab, annotations = all.annotations)
+synapser::synSetAnnotations(comp, annotations = all.annotations)
 file.remove('composition.csv')
 
 
