@@ -112,14 +112,24 @@ rm_missing <- function(x){
   return(pruned)
 }
 
-excit_data_rm <- rm_missing(excit_data)
-inhib_data_rm <- rm_missing(inhib_data)
-unlab_data_rm <- rm_missing(unlab_data)
-astro_data_rm <- rm_missing(astro_data)
-oligo_data_rm <- rm_missing(oligo_data)
-opc_data_rm <- rm_missing(opc_data)
-microglia_data_rm <- rm_missing(microglia_data)
+# Generating dataframe without missing features
+#excit_data_rm <- rm_missing(excit_data)
+#inhib_data_rm <- rm_missing(inhib_data)
+#unlab_data_rm <- rm_missing(unlab_data)
+#astro_data_rm <- rm_missing(astro_data)
+#oligo_data_rm <- rm_missing(oligo_data)
+#opc_data_rm <- rm_missing(opc_data)
+#microglia_data_rm <- rm_missing(microglia_data)
 #non_data_rm <- rm_missing(non_data)
+
+# Missing feature pruned data pulling from synapse
+excit_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979729')$path))
+inhib_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979730')$path))
+unlab_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979731')$path))
+astro_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979732')$path))
+oligo_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979733')$path))
+opc_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979734')$path))
+microglia_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979735')$path))
 
 # Summary Statistics for each Broad Cell type category
 # Function to replace the -Inf with 0
@@ -385,6 +395,23 @@ synapser::synSetAnnotations(Unlab, annotations = all.annotations)
 file.remove('Unlabelled_Cells.csv')
 
 
+# Missing Features push to synapse (just replaced names for each file)
+write.csv(microglia_data_rm,
+          file = 'microglia_data_rm.csv',
+          quote = FALSE
+)
+
+microglia_rm_dat <- synStore( File(
+  path = 'microglia_data_rm.csv',
+  name = 'Microglia Missing Features pruned',
+  parentId = activity$properties$id),
+  activityName = activityName,
+  activityDescription = activityDescription
+)
+synapser::synSetAnnotations(microglia_rm_dat, annotations = all.annotations)
+file.remove('microglia_data_rm.csv')
+
+
 # Unlabelled Cells Feature Summary 
 write.csv(unlab_summary,
           file = 'Unlabelled_Summary.csv',
@@ -451,6 +478,5 @@ comp <- synStore( File(
 )
 synapser::synSetAnnotations(comp, annotations = all.annotations)
 file.remove('composition.csv')
-
 
 
