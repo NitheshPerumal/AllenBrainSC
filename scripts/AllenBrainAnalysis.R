@@ -57,17 +57,22 @@ remove(gene_exp) # Removing un normalized expression matrix to save memory
 # Counts of Broad Cell Types based on Brain Region
 regional_class <- as.data.frame.matrix(xtabs(formula = ~region_label+class_label, meta))
 colnames(regional_class)[1] <- "Unlabelled"
+write.csv(regional_class, file = 'regional_class_eda.csv', quote = FALSE)
 
 # Counts of Narrow Cell Types based on Brain Region
 regional_subclass <- as.data.frame.matrix(xtabs(formula = ~region_label+subclass_label, meta))
 colnames(regional_subclass)[1] <- "Unlabelled"
+write.csv(regional_subclass, file = 'regional_subclass_eda.csv', quote = FALSE)
 
 # Counts of Narrow Cell Types for Broad Cell Types
 class_sub_rel <- as.data.frame.matrix(xtabs(formula = ~subclass_label+class_label, meta))
+write.csv(class_sub_rel, file = 'class_sub_rel_eda.csv', quote = FALSE)
 
 # Counts of the most specific distinction vs other two 
 cell_type <- as.data.frame.matrix(xtabs(formula = ~cell_type_accession_label+class_label, meta))
 cell_type_sub <- as.data.frame.matrix(xtabs(formula = ~cell_type_accession_label+subclass_label, meta))
+write.csv(cell_type, file = 'cell_type_eda.csv', quote = FALSE)
+write.csv(cell_type_sub, file = 'cell_type_sub_eda.csv', quote = FALSE)
 
 
 # Broad Cell Type Subsets Metadata
@@ -131,21 +136,13 @@ oligo_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979733')
 opc_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979734')$path))
 microglia_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979735')$path))
 
-# Summary Statistics for each Broad Cell type category
-# Function to replace the -Inf with 0
-# @param x gene expression dataframe with -Inf values to remove
-# @return y dataframe with -Inf replaced with 0
-inf <- function(x){
-  y <- replace(x, which(x == '-Inf'), as.numeric(0))
-  return(y)
-}
 
 # Function to find mean of every column
 # @param x dataframe of gene matrix to generate summary statistics for
 # @return out dataframe of summary statistics
 stats <- function(x){
-  #y <- apply(x[,-1], 2, FUN = inf)
   y <- x[,c(-1,-2)]
+  
   m <- as.data.frame(apply(y, 2, FUN = mean))
   colnames(m)[1] <- 'mean'
   
@@ -228,6 +225,7 @@ features_med[is.na(features_med)] <- 0
 colnames(features_med) <- c('features', 'Inhibitory','Unlabelled','Excitatory',
                             'Astrocytes', 'Oligodendrocytes', 'OPC', 'Microglia')
 features_med$sum <- apply(features_med[,-1],1, FUN = sum)
+
 
 # Proportion Composition by Median as Cell Type Score
 composition <- features_med[,c(-1,-9)]/features_med[,9]
