@@ -94,7 +94,7 @@ astro_data <- semi_join(cpm_exp, astro, by = 'sample_name')
 oligo_data <- semi_join(cpm_exp, oligo, by = 'sample_name')
 opc_data <- semi_join(cpm_exp, opc, by = 'sample_name')
 microglia_data <- semi_join(cpm_exp, microglia, by = 'sample_name')
-#non_data <- semi_join(cpm_exp, non_neuronal, by = 'sample_name') # Non-neuronal Gene exp
+
 
 # Remvoing un-needed data to free up memory
 remove(unlabelled)
@@ -104,7 +104,7 @@ remove(astro)
 remove(oligo)
 remove(opc)
 remove(microglia)
-#remove(non_neuronal)
+
 
 # Removing missing features if 50% or more instances are <= 1 CPM
 # @param x datframe of gene expression matrix
@@ -125,7 +125,6 @@ rm_missing <- function(x){
 #oligo_data_rm <- rm_missing(oligo_data)
 #opc_data_rm <- rm_missing(opc_data)
 #microglia_data_rm <- rm_missing(microglia_data)
-#non_data_rm <- rm_missing(non_data)
 
 # Missing feature pruned data pulling from synapse
 excit_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979729')$path))
@@ -141,12 +140,12 @@ microglia_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn259797
 # @param x dataframe of gene matrix to generate summary statistics for
 # @return out dataframe of summary statistics
 stats <- function(x){
-  y <- x[,c(-1,-2)]
+  y <- x[,c(-1,-2,-3)]
   
-  m <- as.data.frame(apply(y, 2, FUN = mean))
+  m <- as.data.frame(apply(y, 2, function(x) log2(as.numeric(mean(x)))))
   colnames(m)[1] <- 'mean'
   
-  med <- as.data.frame(apply(y, 2, FUN = median))
+  med <- as.data.frame(apply(y, 2, function(x) log2(as.numeric(median(x)))))
   colnames(med)[1] <- 'median'
   
   std_dev <- as.data.frame(apply(y, 2, FUN = sd))
@@ -167,7 +166,7 @@ astro_summary <- stats(astro_data_rm)
 oligo_summary <- stats(oligo_data_rm)
 opc_summary <- stats(opc_data_rm)
 microglia_summary <- stats(microglia_data_rm)
-#non_summary <- stats(non_data_rm)
+
 
 # Histograms of Mean - Median to decide central tendency to use
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Excit_hist.jpeg')
@@ -198,8 +197,6 @@ jpeg(file = '/home/nperumal/AllenBrainSC/plots/Microglia_hist.jpeg')
 hist(microglia_summary$diff, main = 'Microglia Mean - Median', xlab = 'mean - median')
 dev.off()
 
-#hist(non_summary$diff, main = 'Excitatory Cells Mean - Median', xlab = 'mean - median')
-
 
 # Dataframe with medians of all features by Broad Cell type
 features <- as.data.frame(names(cpm_exp))
@@ -214,12 +211,10 @@ astro_med <- left_join(features, astro_summary[,c(1,3)], by = 'features')
 oligo_med <- left_join(features, oligo_summary[,c(1,3)], by = 'features')
 opc_med <- left_join(features, opc_summary[,c(1,3)], by = 'features')
 microglia_med <- left_join(features, microglia_summary[,c(1,3)], by = 'features')
-#non_med <- left_join(features, non_summary[,c(1,3)], by = 'features')
 
 features_med <- cbind(inhib_med[,2], unlab_med[,2], excit_med[,2],
                       astro_med[,2], oligo_med[,2], opc_med[,2],
                       microglia_med[,2])
-features_med <- log2(features_med)
 features_med <- cbind(features, features_med)
 features_med[is.na(features_med)] <- 0
 colnames(features_med) <- c('features', 'Inhibitory','Unlabelled','Excitatory',
@@ -233,14 +228,43 @@ composition[is.na(composition)] <- 0
 composition <- cbind(features_med[,1], composition)
 colnames(composition)[1] <- 'features'
 
-hist(composition$Inhib[composition$Inhib != 0])
-hist(composition$Unlabelled[composition$Unlabelled != 0])
-hist(composition$Excitatory[composition$Excitatory != 0])
-hist(composition$Astrocytes[composition$Astrocytes != 0])
-hist(composition$Oligodendrocytes[composition$Oligodendrocytes != 0])
-hist(composition$OPC[composition$OPC != 0])
-hist(composition$Microglia[composition$Microglia != 0])
-#hist(composition$Nonneuronal[composition$Nonneuronal != 0])
+
+# Histograms of composition values by cell type
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Inhib_comp.jpeg')
+hist(composition$Inhib[composition$Inhib != 0], main = 'Inhibitory Cells Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Unlab_comp.jpeg')
+hist(composition$Unlabelled[composition$Unlabelled != 0], main = 'Unlabelled Cells Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Excit_comp.jpeg')
+hist(composition$Excitatory[composition$Excitatory != 0], main = 'Excitatory Cells Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Astro_comp.jpeg')
+hist(composition$Astrocytes[composition$Astrocytes != 0], main = 'Astrocytes Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Oligo_comp.jpeg')
+hist(composition$Oligodendrocytes[composition$Oligodendrocytes != 0], main = 'Oligodendrocytes Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/OPC_comp.jpeg')
+hist(composition$OPC[composition$OPC != 0], main = 'Oligo Precursor Cells Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Microglia_comp.jpeg')
+hist(composition$Microglia[composition$Microglia != 0], main = 'Microglia Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
 
 # UpSet Plot
 ups <- features_med
