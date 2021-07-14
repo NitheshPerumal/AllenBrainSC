@@ -142,6 +142,9 @@ microglia_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn259797
 stats <- function(x){
   y <- x[,c(-1,-2,-3)]
   
+  wm <- as.data.frame(apply(y, 2, function(x) log2(mean(winsor(x, trim = 0.05, na.rm = TRUE)))))
+  colnames(wm)[1] <- 'wins_mean'
+  
   m <- as.data.frame(apply(y, 2, function(x) log2(as.numeric(mean(x)))))
   colnames(m)[1] <- 'mean'
   
@@ -154,8 +157,8 @@ stats <- function(x){
   feature_name <- as.data.frame(rownames(m))
   colnames(feature_name)[1] <- 'features'
   
-  out <- cbind(feature_name,m,med, m-med, std_dev)
-  colnames(out)[4] <- 'diff'
+  out <- cbind(feature_name, wm, m, med, m-med, std_dev)
+  colnames(out)[5] <- 'diff'
   return(out)
 }
 
@@ -204,13 +207,13 @@ features <- as.data.frame(features[-1,])
 colnames(features)[1] <- 'features'
 
 # Median of features by Broad Cell Type
-inhib_med <- left_join(features, inhib_summary[,c(1,3)], by = 'features')
-unlab_med <- left_join(features, unlab_summary[,c(1,3)], by = 'features')
-excit_med <- left_join(features, excit_summary[,c(1,3)], by = 'features')
-astro_med <- left_join(features, astro_summary[,c(1,3)], by = 'features')
-oligo_med <- left_join(features, oligo_summary[,c(1,3)], by = 'features')
-opc_med <- left_join(features, opc_summary[,c(1,3)], by = 'features')
-microglia_med <- left_join(features, microglia_summary[,c(1,3)], by = 'features')
+inhib_med <- left_join(features, inhib_summary[,c(1,4)], by = 'features')
+unlab_med <- left_join(features, unlab_summary[,c(1,4)], by = 'features')
+excit_med <- left_join(features, excit_summary[,c(1,4)], by = 'features')
+astro_med <- left_join(features, astro_summary[,c(1,4)], by = 'features')
+oligo_med <- left_join(features, oligo_summary[,c(1,4)], by = 'features')
+opc_med <- left_join(features, opc_summary[,c(1,4)], by = 'features')
+microglia_med <- left_join(features, microglia_summary[,c(1,4)], by = 'features')
 
 features_med <- cbind(inhib_med[,2], unlab_med[,2], excit_med[,2],
                       astro_med[,2], oligo_med[,2], opc_med[,2],
@@ -219,7 +222,8 @@ features_med <- cbind(features, features_med)
 features_med[is.na(features_med)] <- 0
 colnames(features_med) <- c('features', 'Inhibitory','Unlabelled','Excitatory',
                             'Astrocytes', 'Oligodendrocytes', 'OPC', 'Microglia')
-features_med$sum <- apply(features_med[,-1],1, FUN = sum)
+features_med$sum <- apply(features_med[,-1], 1, FUN = sum)
+features_med <- arrange(features_med[-1,], desc(sum))
 
 
 # Proportion Composition by Median as Cell Type Score
@@ -227,7 +231,6 @@ composition <- features_med[,c(-1,-9)]/features_med[,9]
 composition[is.na(composition)] <- 0
 composition <- cbind(features_med[,1], composition)
 colnames(composition)[1] <- 'features'
-
 
 # Histograms of composition values by cell type
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Inhib_comp.jpeg')
@@ -266,6 +269,70 @@ hist(composition$Microglia[composition$Microglia != 0], main = 'Microglia Compos
 dev.off()
 
 
+# Winsorized mean instead of median
+
+# Winsorized Mean of features by Broad Cell Type
+inhib_mean <- left_join(features, inhib_summary[,c(1,2)], by = 'features')
+unlab_mean <- left_join(features, unlab_summary[,c(1,2)], by = 'features')
+excit_mean <- left_join(features, excit_summary[,c(1,2)], by = 'features')
+astro_mean <- left_join(features, astro_summary[,c(1,2)], by = 'features')
+oligo_mean <- left_join(features, oligo_summary[,c(1,2)], by = 'features')
+opc_mean <- left_join(features, opc_summary[,c(1,2)], by = 'features')
+microglia_mean <- left_join(features, microglia_summary[,c(1,2)], by = 'features')
+
+features_mean <- cbind(inhib_mean[,2], unlab_mean[,2], excit_mean[,2],
+                      astro_mean[,2], oligo_mean[,2], opc_mean[,2],
+                      microglia_mean[,2])
+features_mean <- cbind(features, features_mean)
+features_mean[is.na(features_mean)] <- 0
+colnames(features_mean) <- c('features', 'Inhibitory','Unlabelled','Excitatory',
+                            'Astrocytes', 'Oligodendrocytes', 'OPC', 'Microglia')
+features_mean$sum <- apply(features_mean[,-1], 1, FUN = sum)
+features_mean <- arrange(features_mean[-1,], desc(sum))
+
+# Proportion Composition by Median as Cell Type Score
+composition_mean <- features_mean[,c(-1,-9)]/features_mean[,9]
+composition_mean[is.na(composition_mean)] <- 0
+composition_mean <- cbind(features_mean[,1], composition_mean)
+colnames(composition_mean)[1] <- 'features'
+
+# Histograms of composition values by cell type
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Inhib_comp_mean.jpeg')
+hist(composition_mean$Inhib[composition_mean$Inhib != 0], main = 'Inhibitory Cells Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Unlab_comp_mean.jpeg')
+hist(composition_mean$Unlabelled[composition_mean$Unlabelled != 0], main = 'Unlabelled Cells Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Excit_comp_mean.jpeg')
+hist(composition_mean$Excitatory[composition_mean$Excitatory != 0], main = 'Excitatory Cells Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Astro_comp_mean.jpeg')
+hist(composition_mean$Astrocytes[composition_mean$Astrocytes != 0], main = 'Astrocytes Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Oligo_comp_mean.jpeg')
+hist(composition_mean$Oligodendrocytes[composition_mean$Oligodendrocytes != 0], main = 'Oligodendrocytes Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/OPC_comp_mean.jpeg')
+hist(composition_mean$OPC[composition_mean$OPC != 0], main = 'Oligo Precursor Cells Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/Microglia_comp_mean.jpeg')
+hist(composition_mean$Microglia[composition_mean$Microglia != 0], main = 'Microglia Composition values', 
+     xlab = 'Composition values')
+dev.off()
+
+
 # UpSet Plot
 ups <- features_med
 ups[ups > 0] <- 1
@@ -278,6 +345,8 @@ upset(ups, sets = c('Inhibitory','Unlabelled','Excitatory', 'Astrocytes',
 dev.off()
 
 # Need to make UpSet Plot by region------------------------
+
+
 
 # Pushing data to synapse -----------------------------------------------------------
 
