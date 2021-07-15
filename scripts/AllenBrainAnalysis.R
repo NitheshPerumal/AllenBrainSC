@@ -112,7 +112,7 @@ remove(microglia)
 # @return pruned dataframe of gene expression matrix with missing features removed
 rm_missing <- function(x){
   
-  count <- apply(x,2, function(x) sum(x <= 1))
+  count <- apply(x,2, function(x) sum(x <= 1)) # 0.5 and 0.1 CPM test
   #count <- parApply(cl,x, 2,function(x) sum(x <= 1))
   pruned <- x[ , -which(names(x) %in% names(which(count >= 0.5*nrow(x))))]
   return(pruned)
@@ -158,7 +158,7 @@ stats <- function(x){
   feature_name <- as.data.frame(rownames(m))
   colnames(feature_name)[1] <- 'features'
   
-  out <- cbind(feature_name, wm, m, med, wm-med, std_dev)
+  out <- cbind(feature_name, wm, m, med, m-med, std_dev)
   colnames(out)[5] <- 'diff'
   return(out)
 }
