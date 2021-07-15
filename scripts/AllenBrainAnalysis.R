@@ -12,6 +12,7 @@ library(edgeR)
 library(data.table)
 library(parallel)
 library(UpSetR)
+library(psych)
 
 # Load Data -----------------------------------------------------------------
 
@@ -157,7 +158,7 @@ stats <- function(x){
   feature_name <- as.data.frame(rownames(m))
   colnames(feature_name)[1] <- 'features'
   
-  out <- cbind(feature_name, wm, m, med, m-med, std_dev)
+  out <- cbind(feature_name, wm, m, med, wm-med, std_dev)
   colnames(out)[5] <- 'diff'
   return(out)
 }
