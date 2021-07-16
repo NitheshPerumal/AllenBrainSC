@@ -76,37 +76,6 @@ write.csv(cell_type, file = 'cell_type_eda.csv', quote = FALSE)
 write.csv(cell_type_sub, file = 'cell_type_sub_eda.csv', quote = FALSE)
 
 
-# Broad Cell Type Subsets Metadata
-unlabelled <- subset(meta, class_label == "") # Unlabelled samples
-inhibitory <- subset(meta, class_label == "GABAergic") # Inhibitory samples
-excitatory <- subset(meta, class_label == "Glutamatergic") # Excitatory samples
-astro <- subset(meta, subclass_label == 'Astrocyte') # Astrocyte samples
-oligo <- subset(meta, subclass_label == 'Oligodendrocyte') # Oligodendrocytes samples
-opc <- subset(meta, subclass_label == 'OPC') # Oligo Precursor Cells samples
-microglia <- subset(meta, subclass_label == 'Microglia') # Microglia samples
-#non_neuronal <- subset(meta, class_label == "Non-neuronal") # Non-neuronal samples
-
-
-# Subsetting the gene expression matrix by Broad Cell Type
-unlab_data <- semi_join(cpm_exp, unlabelled, by = 'sample_name') # Unlabelled Gene exp
-inhib_data <- semi_join(cpm_exp, inhibitory, by = 'sample_name') # Inhibitory Gene exp
-excit_data <- semi_join(cpm_exp, excitatory, by = 'sample_name') # Excitatory Gene exp
-astro_data <- semi_join(cpm_exp, astro, by = 'sample_name')
-oligo_data <- semi_join(cpm_exp, oligo, by = 'sample_name')
-opc_data <- semi_join(cpm_exp, opc, by = 'sample_name')
-microglia_data <- semi_join(cpm_exp, microglia, by = 'sample_name')
-
-
-# Remvoing un-needed data to free up memory
-remove(unlabelled)
-remove(inhibitory)
-remove(excitatory)
-remove(astro)
-remove(oligo)
-remove(opc)
-remove(microglia)
-
-
 # Removing missing features if 50% or more instances are <= 1 CPM
 # @param x datframe of gene expression matrix
 # @return pruned dataframe of gene expression matrix with missing features removed
@@ -127,6 +96,61 @@ rm_missing <- function(x){
 #opc_data_rm <- rm_missing(opc_data)
 #microglia_data_rm <- rm_missing(microglia_data)
 
+# Missing feature pruning from Broad cell types
+# broad_type <- group_by(meta[,c(1,9)], by = 'class_label')[,-3]
+# for(i in 1:nrow(broad_type)){
+#   if(broad_type[i,2] == ''){
+#     broad_type[i,2] <- 'unlab_data_rm'
+#   }
+#   else if(broad_type[i,2] == 'GABAergic'){
+#     broad_type[i,2] <- "inhib_data_rm"
+#   }
+#   else if(broad_type[i,2] == "Glutamatergic"){
+#     broad_type[i,2] <- "excit_data_rm"
+#   }
+# }
+
+
+#for (i in unique(broad_type$class_label)[-4]) {
+#  command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
+#  eval(parse(text=command))
+#  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+#  eval(parse(text=command2))
+#  command3 <- paste0(i, "<- rm_missing(",i,")")
+#  eval(parse(text=command3))
+#}
+
+
+# Non Neuronal specific cell types feature pruning (decided based on EDA)
+# sub_type <- group_by(meta[,c(1,12)], by = 'class_label')[,-3]
+# for(i in 1:nrow(sub_type)){
+#   if(sub_type[i,2] == 'Astrocyte'){
+#     sub_type[i,2] <- 'astro_data_rm'
+#   }
+#   else if(sub_type[i,2] == 'Oligodendrocyte'){
+#     sub_type[i,2] <- "oligo_data_rm"
+#   }
+#   else if(sub_type[i,2] == "OPC"){
+#     sub_type[i,2] <- "opc_data_rm"
+#   }
+#   else if(sub_type[i,2] == "Microglia"){
+#     sub_type[i,2] <- "microglia_data_rm"
+#   }
+#   else{
+#     sub_type[i,2] <- NA
+#   }
+# }
+# sub_type <- na.omit(sub_type)
+
+#for (i in unique(sub_type$subclass_label)) {
+#  command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
+#  eval(parse(text=command))
+#  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+# eval(parse(text=command2))
+#  command3 <- paste0(i, "<- rm_missing(",i,")")
+#  eval(parse(text=command3))
+#}
+
 # Missing feature pruned data pulling from synapse
 excit_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979729')$path))
 inhib_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979730')$path))
@@ -135,6 +159,27 @@ astro_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979732')
 oligo_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979733')$path))
 opc_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979734')$path))
 microglia_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979735')$path))
+
+# Automatically subset by region and missing features removed
+#region <- group_by(meta[,c(1,21)], by = 'region_label')[,-3]
+#for (i in unique(region$region_label)) {
+#  command <- paste0(i, "<-subset(region, region_label=='", i, "')")
+#  eval(parse(text=command))
+#  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+#  eval(parse(text=command2))
+#  command3 <- paste0(i, "<- rm_missing(",i,")")
+#  eval(parse(text=command3))
+#}
+
+# Pulling missing feature pruned data for region from synapse
+mtg_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986011')$path))
+v1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986012')$path))
+cgg_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986013')$path))
+m1lm_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986014')$path))
+s1ul_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986015')$path))
+s1lm_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986016')$path))
+m1ul_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986017')$path))
+a1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986018')$path))
 
 
 # Function to find mean of every column
@@ -502,6 +547,23 @@ microglia_rm_dat <- synStore( File(
 )
 synapser::synSetAnnotations(microglia_rm_dat, annotations = all.annotations)
 file.remove('microglia_data_rm.csv')
+
+
+# Missing feature brain region push to synapse (just changed the name)
+write.csv(MTG,
+          file = 'MTG.csv',
+          quote = FALSE
+)
+
+mtg <- synStore( File(
+  path = 'MTG.csv',
+  name = 'MTG Missing Features pruned',
+  parentId = activity$properties$id),
+  activityName = activityName,
+  activityDescription = activityDescription
+)
+synapser::synSetAnnotations(mtg, annotations = all.annotations)
+file.remove('MTG.csv')
 
 
 # Unlabelled Cells Feature Summary 
