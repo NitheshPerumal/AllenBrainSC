@@ -87,14 +87,6 @@ rm_missing <- function(x){
   return(pruned)
 }
 
-# Generating dataframe without missing features
-#excit_data_rm <- rm_missing(excit_data)
-#inhib_data_rm <- rm_missing(inhib_data)
-#unlab_data_rm <- rm_missing(unlab_data)
-#astro_data_rm <- rm_missing(astro_data)
-#oligo_data_rm <- rm_missing(oligo_data)
-#opc_data_rm <- rm_missing(opc_data)
-#microglia_data_rm <- rm_missing(microglia_data)
 
 # Missing feature pruning from Broad cell types
 # broad_type <- group_by(meta[,c(1,9)], by = 'class_label')[,-3]
