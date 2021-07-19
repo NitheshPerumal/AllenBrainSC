@@ -208,6 +208,15 @@ oligo_summary <- stats(oligo_data_rm)
 opc_summary <- stats(opc_data_rm)
 microglia_summary <- stats(microglia_data_rm)
 
+mtg_summary <- stats(mtg_rm)
+v1c_summary <- stats(v1c_rm)
+cgg_summary <- stats(cgg_rm)
+m1lm_summary <- stats(m1lm_rm)
+s1ul_summary <- stats(s1ul_rm)
+s1lm_summary <- stats(s1lm_rm)
+m1ul_summary <- stats(m1ul_rm)
+a1c_summary <- stats(a1c_rm)
+
 
 # Histograms of Mean - Median to decide central tendency to use
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Excit_hist.jpeg')
@@ -261,8 +270,7 @@ features_med[is.na(features_med)] <- 0
 colnames(features_med) <- c('features', 'Inhibitory','Unlabelled','Excitatory',
                             'Astrocytes', 'Oligodendrocytes', 'OPC', 'Microglia')
 features_med$sum <- apply(features_med[,-1], 1, FUN = sum)
-features_med <- arrange(features_med[-1,], desc(sum))
-
+features_med <- features_med[-1,]
 
 # Proportion Composition by Median as Cell Type Score
 composition <- features_med[,c(-1,-9)]/features_med[,9]
@@ -371,19 +379,50 @@ hist(composition_mean$Microglia[composition_mean$Microglia != 0], main = 'Microg
 dev.off()
 
 
+# Brain region medians
+mtg_med <- left_join(features, mtg_summary[,c(1,4)], by = 'features')
+v1c_med <- left_join(features, v1c_summary[,c(1,4)], by = 'features')
+cgg_med <- left_join(features, cgg_summary[,c(1,4)], by = 'features')
+m1lm_med <- left_join(features, m1lm_summary[,c(1,4)], by = 'features')
+s1ul_med <- left_join(features, s1ul_summary[,c(1,4)], by = 'features')
+s1lm_med <- left_join(features, s1lm_summary[,c(1,4)], by = 'features')
+m1ul_med <- left_join(features, m1ul_summary[,c(1,4)], by = 'features')
+a1c_med <- left_join(features, a1c_summary[,c(1,4)], by = 'features')
+
+features_med_region <- cbind(mtg_med[,2], v1c_med[,2], cgg_med[,2],
+                      m1lm_med[,2], s1ul_med[,2], s1lm_med[,2],
+                      m1ul_med[,2], a1c_med[,2])
+features_med_region <- cbind(features, features_med_region)
+features_med_region[is.na(features_med_region)] <- 0
+colnames(features_med_region) <- c('features', 'mtg','vc','cgg',
+                            'mlm', 'sul', 'slm', 'mul', 'ac')
+features_med_region$sum <- apply(features_med_region[,-1], 1, FUN = sum)
+features_med_region <- features_med_region[-1,]
+
+# Proportion Composition by Median as Cell Type Score
+composition_region <- features_med_region[,c(-1,-10)]/features_med_region[,10]
+composition_region[is.na(composition_region)] <- 0
+composition_region <- cbind(features_med_region[,1], composition_region)
+colnames(composition_region)[1] <- 'features'
+
+
 # UpSet Plot
 ups <- features_med
-ups[ups > 0] <- 1
+ups[ups != 0] <- 1
 
-# Upset plot saved as jpeg
+ups_region <- features_med_region
+ups_region[ups_region != 0] <- 1
+
+# Upset plot borad cell type saved as jpeg
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/UpSet_Broad_Cell_Types.jpeg')
-upset(ups, sets = c('Inhibitory','Unlabelled','Excitatory', 'Astrocytes',
-                    'Oligodendrocytes', 'OPC', 'Microglia'), order.by = 'freq',
+upset(ups, sets = names(ups)[c(-1,-9)], order.by = 'freq',
       mainbar.y.label = 'Broad Cell Type Intersection', sets.x.label = 'Broad Cell Type') 
 dev.off()
 
-# Need to make UpSet Plot by region------------------------
-
+#UpSet Plot by region saved as jpeg
+jpeg(file = '/home/nperumal/AllenBrainSC/plots/UpSet_Brain_Region.jpeg')
+upset(as.data.frame(ups_region), sets = names(ups_region)[c(-1,-10)], order.by = 'freq')
+dev.off()
 
 
 # Pushing data to synapse -----------------------------------------------------------
@@ -624,5 +663,4 @@ comp <- synStore( File(
 )
 synapser::synSetAnnotations(comp, annotations = all.annotations)
 file.remove('composition.csv')
-
 
