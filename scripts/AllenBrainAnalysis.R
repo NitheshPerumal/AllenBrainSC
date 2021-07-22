@@ -83,102 +83,142 @@ rm_missing <- function(x){
   
   count <- apply(x,2, function(x) sum(x <= 1)) # 0.5 and 0.1 CPM test
   #count <- parApply(cl,x, 2,function(x) sum(x <= 1))
-  pruned <- x[ , -which(names(x) %in% names(which(count >= 0.5*nrow(x))))]
+  pruned <- x[ , -which(names(x) %in% names(which(count >= 0.5*nrow(x)))) ]
+  return(pruned)
+}
+
+prune <- function(x){
+  count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, FUN = median))))
+  pruned <- as.data.frame(count[,!(count <= 1)])
+  pruned <- x[,c('sample_name',names(pruned))]
   return(pruned)
 }
 
 
 # Missing feature pruning from Broad cell types
-# broad_type <- group_by(meta[,c(1,9)], by = 'class_label')[,-3]
-# for(i in 1:nrow(broad_type)){
-#   if(broad_type[i,2] == ''){
-#     broad_type[i,2] <- 'unlab_data_rm'
-#   }
-#   else if(broad_type[i,2] == 'GABAergic'){
-#     broad_type[i,2] <- "inhib_data_rm"
-#   }
-#   else if(broad_type[i,2] == "Glutamatergic"){
-#     broad_type[i,2] <- "excit_data_rm"
-#   }
+ broad_type <- group_by(meta[,c(1,9)], by = 'class_label')[,-3]
+ for(i in 1:nrow(broad_type)){
+   if(broad_type[i,2] == ''){
+     broad_type[i,2] <- 'unlab_data_rm'
+   }
+   else if(broad_type[i,2] == 'GABAergic'){
+     broad_type[i,2] <- "inhib_data_rm"
+   }
+   else if(broad_type[i,2] == "Glutamatergic"){
+     broad_type[i,2] <- "excit_data_rm"
+   }
+   else{
+     broad_type[i,2] <- NA
+   }
+ }
+ broad_type <- na.omit(broad_type)
+
+ 
+ for (i in unique(broad_type$class_label)) {
+   command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
+   eval(parse(text=command))
+   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+   eval(parse(text=command2))
+   command3 <- paste0(i, "<- prune(",i,")")
+   eval(parse(text=command3))
+ }
+
+ 
+# for (i in unique(broad_type$class_label)) {
+#   command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
+#   eval(parse(text=command))
+#   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+#   eval(parse(text=command2))
+#   command3 <- paste0(i, "<- rm_missing(",i,")")
+#   eval(parse(text=command3))
 # }
-
-
-#for (i in unique(broad_type$class_label)[-4]) {
-#  command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
-#  eval(parse(text=command))
-#  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-#  eval(parse(text=command2))
-#  command3 <- paste0(i, "<- rm_missing(",i,")")
-#  eval(parse(text=command3))
-#}
 
 
 # Non Neuronal specific cell types feature pruning (decided based on EDA)
-# sub_type <- group_by(meta[,c(1,12)], by = 'class_label')[,-3]
-# for(i in 1:nrow(sub_type)){
-#   if(sub_type[i,2] == 'Astrocyte'){
-#     sub_type[i,2] <- 'astro_data_rm'
-#   }
-#   else if(sub_type[i,2] == 'Oligodendrocyte'){
-#     sub_type[i,2] <- "oligo_data_rm"
-#   }
-#   else if(sub_type[i,2] == "OPC"){
-#     sub_type[i,2] <- "opc_data_rm"
-#   }
-#   else if(sub_type[i,2] == "Microglia"){
-#     sub_type[i,2] <- "microglia_data_rm"
-#   }
-#   else{
-#     sub_type[i,2] <- NA
-#   }
-# }
-# sub_type <- na.omit(sub_type)
+ sub_type <- group_by(meta[,c(1,12)], by = 'class_label')[,-3]
+ for(i in 1:nrow(sub_type)){
+   if(sub_type[i,2] == 'Astrocyte'){
+     sub_type[i,2] <- 'astro_data_rm'
+   }
+   else if(sub_type[i,2] == 'Oligodendrocyte'){
+     sub_type[i,2] <- "oligo_data_rm"
+   }
+   else if(sub_type[i,2] == "OPC"){
+     sub_type[i,2] <- "opc_data_rm"
+   }
+   else if(sub_type[i,2] == "Microglia"){
+     sub_type[i,2] <- "microglia_data_rm"
+   }
+   else{
+     sub_type[i,2] <- NA
+   }
+ }
+ sub_type <- na.omit(sub_type)
 
-#for (i in unique(sub_type$subclass_label)) {
-#  command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
-#  eval(parse(text=command))
-#  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-# eval(parse(text=command2))
-#  command3 <- paste0(i, "<- rm_missing(",i,")")
-#  eval(parse(text=command3))
-#}
+ 
+ for (i in unique(sub_type$subclass_label)) {
+   command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
+   eval(parse(text=command))
+   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+   eval(parse(text=command2))
+   command3 <- paste0(i, "<- prune(",i,")")
+   eval(parse(text=command3))
+ } 
+
+# for (i in unique(sub_type$subclass_label)) {
+#   command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
+#   eval(parse(text=command))
+#   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+#   eval(parse(text=command2))
+#   command3 <- paste0(i, "<- rm_missing(",i,")")
+#   eval(parse(text=command3))
+# }
 
 # Missing feature pruned data pulling from synapse
-excit_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979729')$path))
-inhib_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979730')$path))
-unlab_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979731')$path))
-astro_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979732')$path))
-oligo_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979733')$path))
-opc_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979734')$path))
-microglia_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979735')$path))
+excit_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979729')$path))[,c(-1,-2)]
+inhib_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979730')$path))[,c(-1,-2)]
+unlab_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979731')$path))[,c(-1,-2)]
+astro_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979732')$path))[,c(-1,-2)]
+oligo_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979733')$path))[,c(-1,-2)]
+opc_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979734')$path))[,c(-1,-2)]
+microglia_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979735')$path))[,c(-1,-2)]
 
 # Automatically subset by region and missing features removed
-#region <- group_by(meta[,c(1,21)], by = 'region_label')[,-3]
-#for (i in unique(region$region_label)) {
-#  command <- paste0(i, "<-subset(region, region_label=='", i, "')")
-#  eval(parse(text=command))
-#  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-#  eval(parse(text=command2))
-#  command3 <- paste0(i, "<- rm_missing(",i,")")
-#  eval(parse(text=command3))
-#}
+region <- group_by(meta[,c(1,21)], by = 'region_label')[,-3]
+for (i in unique(region$region_label)) {
+ command <- paste0(i, "<-subset(region, region_label=='", i, "')")
+ eval(parse(text=command))
+ command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+ eval(parse(text=command2))
+ command3 <- paste0(i, "<- prune(",i,")")
+ eval(parse(text=command3))
+}
+
+# for (i in unique(region$region_label)) {
+#   command <- paste0(i, "<-subset(region, region_label=='", i, "')")
+#   eval(parse(text=command))
+#   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+#   eval(parse(text=command2))
+#   command3 <- paste0(i, "<- rm_missing(",i,")")
+#   eval(parse(text=command3))
+# }
 
 # Pulling missing feature pruned data for region from synapse
-mtg_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986011')$path))
-v1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986012')$path))
-cgg_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986013')$path))
-m1lm_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986014')$path))
-s1ul_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986015')$path))
-s1lm_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986016')$path))
-m1ul_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986017')$path))
-a1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986018')$path))
+mtg_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986011')$path))[,-1]
+v1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986012')$path))[,c(-1,-2)]
+cgg_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986013')$path))[,c(-1,-2)]
+m1lm_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986014')$path))[,c(-1,-2)]
+s1ul_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986015')$path))[,c(-1,-2)]
+s1lm_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986016')$path))[,c(-1,-2)]
+m1ul_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986017')$path))[,c(-1,-2)]
+a1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986018')$path))[,c(-1,-2)]
 
 
 # Function to find mean of every column
 # @param x dataframe of gene matrix to generate summary statistics for
 # @return out dataframe of summary statistics
 stats <- function(x){
-  y <- x[,c(-1,-2,-3)]
+  y <- x[,-1]
   
   wm <- as.data.frame(apply(y, 2, function(x) log2(mean(winsor(x, trim = 0.05, na.rm = TRUE)))))
   colnames(wm)[1] <- 'wins_mean'
@@ -208,14 +248,23 @@ oligo_summary <- stats(oligo_data_rm)
 opc_summary <- stats(opc_data_rm)
 microglia_summary <- stats(microglia_data_rm)
 
-mtg_summary <- stats(mtg_rm)
-v1c_summary <- stats(v1c_rm)
-cgg_summary <- stats(cgg_rm)
-m1lm_summary <- stats(m1lm_rm)
-s1ul_summary <- stats(s1ul_rm)
-s1lm_summary <- stats(s1lm_rm)
-m1ul_summary <- stats(m1ul_rm)
-a1c_summary <- stats(a1c_rm)
+# mtg_summary <- stats(mtg_rm)
+# v1c_summary <- stats(v1c_rm)
+# cgg_summary <- stats(cgg_rm)
+# m1lm_summary <- stats(m1lm_rm)
+# s1ul_summary <- stats(s1ul_rm)
+# s1lm_summary <- stats(s1lm_rm)
+# m1ul_summary <- stats(m1ul_rm)
+# a1c_summary <- stats(a1c_rm)
+
+mtg_summary <- stats(MTG)
+v1c_summary <- stats(V1C)
+cgg_summary <- stats(CgG)
+m1lm_summary <- stats(M1lm)
+s1ul_summary <- stats(S1ul)
+s1lm_summary <- stats(S1lm)
+m1ul_summary <- stats(M1ul)
+a1c_summary <- stats(A1C)
 
 
 # Histograms of Mean - Median to decide central tendency to use
@@ -269,6 +318,8 @@ features_med <- cbind(features, features_med)
 features_med[is.na(features_med)] <- 0
 colnames(features_med) <- c('features', 'Inhibitory','Unlabelled','Excitatory',
                             'Astrocytes', 'Oligodendrocytes', 'OPC', 'Microglia')
+features_med[,-1] <- 2^features_med[,-1] # Undo log transform so x > 0
+features_med[features_med == 1] <- 0
 features_med$sum <- apply(features_med[,-1], 1, FUN = sum)
 features_med <- features_med[-1,]
 
@@ -336,7 +387,7 @@ colnames(features_mean) <- c('features', 'Inhibitory','Unlabelled','Excitatory',
 features_mean$sum <- apply(features_mean[,-1], 1, FUN = sum)
 features_mean <- arrange(features_mean[-1,], desc(sum))
 
-# Proportion Composition by Median as Cell Type Score
+# Proportion Composition by Mean as Cell Type Score
 composition_mean <- features_mean[,c(-1,-9)]/features_mean[,9]
 composition_mean[is.na(composition_mean)] <- 0
 composition_mean <- cbind(features_mean[,1], composition_mean)
@@ -394,8 +445,10 @@ features_med_region <- cbind(mtg_med[,2], v1c_med[,2], cgg_med[,2],
                       m1ul_med[,2], a1c_med[,2])
 features_med_region <- cbind(features, features_med_region)
 features_med_region[is.na(features_med_region)] <- 0
-colnames(features_med_region) <- c('features', 'mtg','vc','cgg',
-                            'mlm', 'sul', 'slm', 'mul', 'ac')
+colnames(features_med_region) <- c('features', 'MTG','V1C','CgG',
+                            'M1lm', 'S1ul', 'S1lm', 'M1ul', 'A1C')
+features_med_region[,-1] <- 2^features_med_region[,-1] # Undo log transform so x > 0
+features_med_region[features_med_region == 1] <- 0
 features_med_region$sum <- apply(features_med_region[,-1], 1, FUN = sum)
 features_med_region <- features_med_region[-1,]
 
@@ -406,14 +459,14 @@ composition_region <- cbind(features_med_region[,1], composition_region)
 colnames(composition_region)[1] <- 'features'
 
 
-# UpSet Plot
+# UpSet Plots
 ups <- features_med
 ups[ups != 0] <- 1
 
 ups_region <- features_med_region
 ups_region[ups_region != 0] <- 1
 
-# Upset plot borad cell type saved as jpeg
+# Upset plot broad cell type saved as jpeg
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/UpSet_Broad_Cell_Types.jpeg')
 upset(ups, sets = names(ups)[c(-1,-9)], order.by = 'freq',
       mainbar.y.label = 'Broad Cell Type Intersection', sets.x.label = 'Broad Cell Type') 
