@@ -79,14 +79,6 @@ write.csv(cell_type_sub, file = 'cell_type_sub_eda.csv', quote = FALSE)
 # Removing missing features if 50% or more instances are <= 1 CPM
 # @param x datframe of gene expression matrix
 # @return pruned dataframe of gene expression matrix with missing features removed
-rm_missing <- function(x){
-  
-  count <- apply(x,2, function(x) sum(x <= 1)) # 0.5 and 0.1 CPM test
-  #count <- parApply(cl,x, 2,function(x) sum(x <= 1))
-  pruned <- x[ , -which(names(x) %in% names(which(count >= 0.5*nrow(x)))) ]
-  return(pruned)
-}
-
 prune <- function(x){
   count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, FUN = median))))
   pruned <- as.data.frame(count[,!(count <= 1)])
@@ -96,83 +88,55 @@ prune <- function(x){
 
 
 # Missing feature pruning from Broad cell types
- broad_type <- group_by(meta[,c(1,9)], by = 'class_label')[,-3]
- for(i in 1:nrow(broad_type)){
-   if(broad_type[i,2] == ''){
-     broad_type[i,2] <- 'unlab_data_rm'
-   }
-   else if(broad_type[i,2] == 'GABAergic'){
-     broad_type[i,2] <- "inhib_data_rm"
-   }
-   else if(broad_type[i,2] == "Glutamatergic"){
-     broad_type[i,2] <- "excit_data_rm"
-   }
-   else{
-     broad_type[i,2] <- NA
-   }
- }
- broad_type <- na.omit(broad_type)
-
+broad_type <- as.data.frame(group_by(meta[,c(1,9)], by = 'class_label')[,-3])
+for(i in 1:nrow(broad_type)){
+  if(broad_type[i,2] == ''){
+    broad_type[i,2] <- 'Unlab'
+  }
+}
+for(i in 1:nrow(broad_type)){
+  broad_type[i,2] <- switch(broad_type[i,2], 
+                          'GABAergic' = 'inhib_data_rm',
+                          'Glutamatergic' = 'excit_data_rm',
+                          'OPC' = 'opc_data_rm',
+                          'Unlab' = 'unlab_data_rm',
+                           NA)
+}
+broad_type <- na.omit(broad_type)
  
- for (i in unique(broad_type$class_label)) {
-   command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
-   eval(parse(text=command))
-   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-   eval(parse(text=command2))
-   command3 <- paste0(i, "<- prune(",i,")")
-   eval(parse(text=command3))
- }
 
- 
-# for (i in unique(broad_type$class_label)) {
-#   command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
-#   eval(parse(text=command))
-#   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-#   eval(parse(text=command2))
-#   command3 <- paste0(i, "<- rm_missing(",i,")")
-#   eval(parse(text=command3))
-# }
+for (i in unique(broad_type$class_label)) {
+  command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
+  eval(parse(text=command))
+  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+  eval(parse(text=command2))
+  command3 <- paste0(i, "<- prune(",i,")")
+  eval(parse(text=command3))
+}
 
 
 # Non Neuronal specific cell types feature pruning (decided based on EDA)
- sub_type <- group_by(meta[,c(1,12)], by = 'class_label')[,-3]
- for(i in 1:nrow(sub_type)){
-   if(sub_type[i,2] == 'Astrocyte'){
-     sub_type[i,2] <- 'astro_data_rm'
-   }
-   else if(sub_type[i,2] == 'Oligodendrocyte'){
-     sub_type[i,2] <- "oligo_data_rm"
-   }
-   else if(sub_type[i,2] == "OPC"){
-     sub_type[i,2] <- "opc_data_rm"
-   }
-   else if(sub_type[i,2] == "Microglia"){
-     sub_type[i,2] <- "microglia_data_rm"
-   }
-   else{
-     sub_type[i,2] <- NA
-   }
- }
- sub_type <- na.omit(sub_type)
-
+sub_type <- as.data.frame(group_by(meta[,c(1,12)], by = 'class_label')[,-3])
+for(i in 1:nrow(sub_type)){
+  sub_type[i,2] <- switch(sub_type[i,2], 
+                      'Astrocyte' = 'astro_data_rm',
+                      'Oligodendrocyte' = 'oligo_data_rm',
+                      'OPC' = 'opc_data_rm',
+                      'Microglia' = 'microglia_data_rm',
+                      NA)
+}
+sub_type <- na.omit(sub_type)
  
- for (i in unique(sub_type$subclass_label)) {
-   command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
-   eval(parse(text=command))
-   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-   eval(parse(text=command2))
-   command3 <- paste0(i, "<- prune(",i,")")
-   eval(parse(text=command3))
- } 
+ 
+for (i in unique(sub_type$subclass_label)) {
+  command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
+  eval(parse(text=command))
+  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+  eval(parse(text=command2))
+  command3 <- paste0(i, "<- prune(",i,")")
+  eval(parse(text=command3))
+} 
 
-# for (i in unique(sub_type$subclass_label)) {
-#   command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
-#   eval(parse(text=command))
-#   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-#   eval(parse(text=command2))
-#   command3 <- paste0(i, "<- rm_missing(",i,")")
-#   eval(parse(text=command3))
-# }
 
 # Missing feature pruned data pulling from synapse
 excit_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979729')$path))[,c(-1,-2)]
@@ -182,6 +146,13 @@ astro_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979732')
 oligo_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979733')$path))[,c(-1,-2)]
 opc_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979734')$path))[,c(-1,-2)]
 microglia_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979735')$path))[,c(-1,-2)]
+
+
+# Finding total number of unique features
+tot_features <- c(names(excit_data_rm), names(inhib_data_rm), names(unlab_data_rm), names(astro_data_rm),
+    names(oligo_data_rm), names(opc_data_rm), names(microglia_data_rm))
+tot_unique_features <- length(unique(tot_features))
+
 
 # Automatically subset by region and missing features removed
 region <- group_by(meta[,c(1,21)], by = 'region_label')[,-3]
@@ -194,14 +165,6 @@ for (i in unique(region$region_label)) {
  eval(parse(text=command3))
 }
 
-# for (i in unique(region$region_label)) {
-#   command <- paste0(i, "<-subset(region, region_label=='", i, "')")
-#   eval(parse(text=command))
-#   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-#   eval(parse(text=command2))
-#   command3 <- paste0(i, "<- rm_missing(",i,")")
-#   eval(parse(text=command3))
-# }
 
 # Pulling missing feature pruned data for region from synapse
 mtg_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986011')$path))[,-1]
@@ -212,6 +175,31 @@ s1ul_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986015')$path)
 s1lm_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986016')$path))[,c(-1,-2)]
 m1ul_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986017')$path))[,c(-1,-2)]
 a1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986018')$path))[,c(-1,-2)]
+
+
+# Unlab per region
+# unlab <- subset(meta, class_label == '')
+# unlab <- unlab[,c(1,21)]
+# for(i in 1:nrow(unlab)){
+#   unlab[i,2] <- switch(unlab[i,2], 
+#                        'MTG' = 'MTG_unlab',
+#                        'V1C' = 'V1C_unlab',
+#                        'CgG' = 'CgG_unlab',
+#                        'M1lm' = 'M1lm_unlab',
+#                        'S1ul' = 'S1ul_unlab',
+#                        'S1lm' = 'S1lm_unlab',
+#                        'M1ul' = 'M1ul_unlab',
+#                        'A1C' = 'A1C_unlab')
+# }
+# 
+# for (i in unique(unlab$region_label)) {
+#   command <- paste0(i, "<-subset(unlab, region_label=='", i, "')")
+#   eval(parse(text=command))
+#   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+#   eval(parse(text=command2))
+#   command3 <- paste0(i, "<- prune(",i,")")
+#   eval(parse(text=command3))
+# } 
 
 
 # Function to find mean of every column
@@ -265,6 +253,19 @@ s1ul_summary <- stats(S1ul)
 s1lm_summary <- stats(S1lm)
 m1ul_summary <- stats(M1ul)
 a1c_summary <- stats(A1C)
+
+
+# mtg_unlab_summary <- stats(MTG_unlab)
+# v1c_unlab_summary <- stats(V1C_unlab)
+# cgg_unlab_summary <- stats(CgG_unlab)
+# m1lm_unlab_summary <- stats(M1lm_unlab)
+# s1ul_unlab_summary <- stats(S1ul_unlab)
+# s1lm_unlab_summary <- stats(S1lm_unlab)
+# m1ul_unlab_summary <- stats(M1ul_unlab)
+# a1c_unlab_summary <- stats(A1C_unlab)
+
+# length(unique(c(names(MTG_unlab),names(V1C_unlab), names(CgG_unlab), names(M1lm_unlab), names(S1lm_unlab),
+#   names(S1ul_unlab), names(M1ul_unlab), names(A1C_unlab))))
 
 
 # Histograms of Mean - Median to decide central tendency to use
@@ -329,6 +330,7 @@ composition[is.na(composition)] <- 0
 composition <- cbind(features_med[,1], composition)
 colnames(composition)[1] <- 'features'
 
+
 # Histograms of composition values by cell type
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Inhib_comp.jpeg')
 hist(composition$Inhib[composition$Inhib != 0], main = 'Inhibitory Cells Composition values', 
@@ -366,70 +368,6 @@ hist(composition$Microglia[composition$Microglia != 0], main = 'Microglia Compos
 dev.off()
 
 
-# Winsorized mean instead of median
-
-# Winsorized Mean of features by Broad Cell Type
-inhib_mean <- left_join(features, inhib_summary[,c(1,2)], by = 'features')
-unlab_mean <- left_join(features, unlab_summary[,c(1,2)], by = 'features')
-excit_mean <- left_join(features, excit_summary[,c(1,2)], by = 'features')
-astro_mean <- left_join(features, astro_summary[,c(1,2)], by = 'features')
-oligo_mean <- left_join(features, oligo_summary[,c(1,2)], by = 'features')
-opc_mean <- left_join(features, opc_summary[,c(1,2)], by = 'features')
-microglia_mean <- left_join(features, microglia_summary[,c(1,2)], by = 'features')
-
-features_mean <- cbind(inhib_mean[,2], unlab_mean[,2], excit_mean[,2],
-                      astro_mean[,2], oligo_mean[,2], opc_mean[,2],
-                      microglia_mean[,2])
-features_mean <- cbind(features, features_mean)
-features_mean[is.na(features_mean)] <- 0
-colnames(features_mean) <- c('features', 'Inhibitory','Unlabelled','Excitatory',
-                            'Astrocytes', 'Oligodendrocytes', 'OPC', 'Microglia')
-features_mean$sum <- apply(features_mean[,-1], 1, FUN = sum)
-features_mean <- arrange(features_mean[-1,], desc(sum))
-
-# Proportion Composition by Mean as Cell Type Score
-composition_mean <- features_mean[,c(-1,-9)]/features_mean[,9]
-composition_mean[is.na(composition_mean)] <- 0
-composition_mean <- cbind(features_mean[,1], composition_mean)
-colnames(composition_mean)[1] <- 'features'
-
-# Histograms of composition values by cell type
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Inhib_comp_mean.jpeg')
-hist(composition_mean$Inhib[composition_mean$Inhib != 0], main = 'Inhibitory Cells Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Unlab_comp_mean.jpeg')
-hist(composition_mean$Unlabelled[composition_mean$Unlabelled != 0], main = 'Unlabelled Cells Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Excit_comp_mean.jpeg')
-hist(composition_mean$Excitatory[composition_mean$Excitatory != 0], main = 'Excitatory Cells Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Astro_comp_mean.jpeg')
-hist(composition_mean$Astrocytes[composition_mean$Astrocytes != 0], main = 'Astrocytes Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Oligo_comp_mean.jpeg')
-hist(composition_mean$Oligodendrocytes[composition_mean$Oligodendrocytes != 0], main = 'Oligodendrocytes Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/OPC_comp_mean.jpeg')
-hist(composition_mean$OPC[composition_mean$OPC != 0], main = 'Oligo Precursor Cells Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Microglia_comp_mean.jpeg')
-hist(composition_mean$Microglia[composition_mean$Microglia != 0], main = 'Microglia Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-
 # Brain region medians
 mtg_med <- left_join(features, mtg_summary[,c(1,4)], by = 'features')
 v1c_med <- left_join(features, v1c_summary[,c(1,4)], by = 'features')
@@ -457,6 +395,37 @@ composition_region <- features_med_region[,c(-1,-10)]/features_med_region[,10]
 composition_region[is.na(composition_region)] <- 0
 composition_region <- cbind(features_med_region[,1], composition_region)
 colnames(composition_region)[1] <- 'features'
+
+
+######################################################################
+# Brain region medians for Unlabelled subset
+# mtg_med <- left_join(features, mtg_unlab_summary[,c(1,4)], by = 'features')
+# v1c_med <- left_join(features, v1c_unlab_summary[,c(1,4)], by = 'features')
+# cgg_med <- left_join(features, cgg_unlab_summary[,c(1,4)], by = 'features')
+# m1lm_med <- left_join(features, m1lm_unlab_summary[,c(1,4)], by = 'features')
+# s1ul_med <- left_join(features, s1ul_unlab_summary[,c(1,4)], by = 'features')
+# s1lm_med <- left_join(features, s1lm_unlab_summary[,c(1,4)], by = 'features')
+# m1ul_med <- left_join(features, m1ul_unlab_summary[,c(1,4)], by = 'features')
+# a1c_med <- left_join(features, a1c_unlab_summary[,c(1,4)], by = 'features')
+# 
+# features_med_region <- cbind(mtg_med[,2], v1c_med[,2], cgg_med[,2],
+#                              m1lm_med[,2], s1ul_med[,2], s1lm_med[,2],
+#                              m1ul_med[,2], a1c_med[,2])
+# features_med_region <- cbind(features, features_med_region)
+# features_med_region[is.na(features_med_region)] <- 0
+# colnames(features_med_region) <- c('features', 'MTG','V1C','CgG',
+#                                    'M1lm', 'S1ul', 'S1lm', 'M1ul', 'A1C')
+# features_med_region[,-1] <- 2^features_med_region[,-1] # Undo log transform so x > 0
+# features_med_region[features_med_region == 1] <- 0
+# features_med_region$sum <- apply(features_med_region[,-1], 1, FUN = sum)
+# features_med_region <- features_med_region[-1,]
+# 
+# # Proportion Composition by Median as Cell Type Score
+# composition_region <- features_med_region[,c(-1,-10)]/features_med_region[,10]
+# composition_region[is.na(composition_region)] <- 0
+# composition_region <- cbind(features_med_region[,1], composition_region)
+# colnames(composition_region)[1] <- 'features'
+################################################################################
 
 
 # UpSet Plots
