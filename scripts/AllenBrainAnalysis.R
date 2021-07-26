@@ -87,6 +87,33 @@ prune <- function(x){
 }
 
 
+########################################################################
+prune_test <- function(x,z){
+  count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, FUN = median))))
+  pruned <- as.data.frame(count[,!(count <= z)])
+  pruned <- x[,c('sample_name',names(pruned))]
+  return(pruned)
+}
+
+cutoff_summ <- function(x){
+  y <- x[,-2]
+  bp <- ncol(y)
+  z <- ncol(as.data.frame(y[,colSums(y) != 0]))
+  cpm_1 <- ncol(prune_test(x,1))
+  cpm_0.5 <- ncol(prune_test(x,0.5))
+  cpm_0.1 <- ncol(prune_test(x,0.1))
+  print(bp)
+  print(z)
+  print(cpm_1)
+  print(cpm_0.5)
+  print(cpm_0.1)
+}
+
+excit_data <- subset(meta, class_label == 'Glutamatergic')
+excit_data <- semi_join(cpm_exp, excit_data, by = 'sample_name')
+cutoff_summ(excit_data)
+################################################################
+
 # Missing feature pruning from Broad cell types
 broad_type <- as.data.frame(group_by(meta[,c(1,9)], by = 'class_label')[,-3])
 for(i in 1:nrow(broad_type)){
