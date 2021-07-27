@@ -79,16 +79,7 @@ write.csv(cell_type_sub, file = 'cell_type_sub_eda.csv', quote = FALSE)
 # Removing missing features if 50% or more instances are <= 1 CPM
 # @param x datframe of gene expression matrix
 # @return pruned dataframe of gene expression matrix with missing features removed
-prune <- function(x){
-  count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, FUN = median))))
-  pruned <- as.data.frame(count[,!(count <= 1)])
-  pruned <- x[,c('sample_name',names(pruned))]
-  return(pruned)
-}
-
-
-########################################################################
-prune_test <- function(x,z){
+prune <- function(x,z){
   count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, FUN = median))))
   pruned <- as.data.frame(count[,!(count <= z)])
   pruned <- x[,c('sample_name',names(pruned))]
@@ -97,22 +88,29 @@ prune_test <- function(x,z){
 
 cutoff_summ <- function(x){
   y <- x[,-2]
+  
   bp <- ncol(y)
-  z <- ncol(as.data.frame(y[,colSums(y) != 0]))
-  cpm_1 <- ncol(prune_test(x,1))
-  cpm_0.5 <- ncol(prune_test(x,0.5))
-  cpm_0.1 <- ncol(prune_test(x,0.1))
-  print(bp)
-  print(z)
-  print(cpm_1)
-  print(cpm_0.5)
-  print(cpm_0.1)
+  bp_names <<- c(bp_names,names(y))
+  
+  z <- as.data.frame(y[,colSums(y) != 0])
+  z_names <<- c(z_names,names(z))
+  z <- ncol(z)
+  
+  cpm_1 <- prune(x,1)
+  cpm_1_names <<- c(cpm_1_names, names(cpm_1))
+  cpm_1 <- ncol(cpm_1)
+  
+  cpm_0.5 <- prune(x,0.5)
+  cpm_0.5_names <<- c(cpm_0.5_names, names(cpm_0.5))
+  cpm_0.5 <- ncol(cpm_0.5)
+  
+  cpm_0.1 <- prune(x,0.1)
+  cpm_0.1_names <<- c(cpm_0.1_names, names(cpm_0.1))
+  cpm_0.1 <- ncol(cpm_0.1)
+  
+  return(as.data.frame(cbind(bp,z,cpm_1,cpm_0.5,cpm_0.1)))
 }
 
-excit_data <- subset(meta, class_label == 'Glutamatergic')
-excit_data <- semi_join(cpm_exp, excit_data, by = 'sample_name')
-cutoff_summ(excit_data)
-################################################################
 
 # Missing feature pruning from Broad cell types
 broad_type <- as.data.frame(group_by(meta[,c(1,9)], by = 'class_label')[,-3])
@@ -137,7 +135,7 @@ for (i in unique(broad_type$class_label)) {
   eval(parse(text=command))
   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
   eval(parse(text=command2))
-  command3 <- paste0(i, "<- prune(",i,")")
+  command3 <- paste0(i, "<- prune(",i,",1)")
   eval(parse(text=command3))
 }
 
@@ -160,9 +158,49 @@ for (i in unique(sub_type$subclass_label)) {
   eval(parse(text=command))
   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
   eval(parse(text=command2))
-  command3 <- paste0(i, "<- prune(",i,")")
+  command3 <- paste0(i, "<- prune(",i,",1)")
   eval(parse(text=command3))
 } 
+
+
+# Analyzing different cutoffs to determine cutoff treshold
+bp_names <<- c()
+z_names <<- c()
+cpm_1_names <<- c()
+cpm_0.5_names <<- c()
+cpm_0.1_names <<- c()
+
+out <- data.frame()
+for (i in unique(broad_type$class_label)) {
+  command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
+  eval(parse(text=command))
+  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+  eval(parse(text=command2))
+  command3 <- paste0("out <- rbind(out,cutoff_summ(",i,"))")
+  eval(parse(text=command3))
+}
+
+for (i in unique(sub_type$subclass_label)) {
+  command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
+  eval(parse(text=command))
+  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+  eval(parse(text=command2))
+  command3 <- paste0("out <- rbind(out,cutoff_summ(",i,"))")
+  eval(parse(text=command3))
+}
+
+unique_features <- cbind(length(unique(bp_names)),length(unique(z_names)),
+                         length(unique(cpm_1_names)),length(unique(cpm_0.5_names)),
+                         length(unique(cpm_0.1_names)))
+colnames(unique_features) <- colnames(out)
+
+cutoff_analysis <- rbind(out, as.data.frame(unique_features))
+
+cell_types <- as.data.frame(c(unique(broad_type$class_label), 
+                              unique(sub_type$subclass_label),
+                              'sum'))
+cutoff_analysis <- cbind(cell_types, cutoff_analysis)
+colnames(cutoff_analysis)[1] <- 'Cell_type'
 
 
 # Missing feature pruned data pulling from synapse
@@ -188,7 +226,7 @@ for (i in unique(region$region_label)) {
  eval(parse(text=command))
  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
  eval(parse(text=command2))
- command3 <- paste0(i, "<- prune(",i,")")
+ command3 <- paste0(i, "<- prune(",i,",1)")
  eval(parse(text=command3))
 }
 
@@ -224,7 +262,7 @@ a1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986018')$path))
 #   eval(parse(text=command))
 #   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
 #   eval(parse(text=command2))
-#   command3 <- paste0(i, "<- prune(",i,")")
+#   command3 <- paste0(i, "<- prune(",i,",1)")
 #   eval(parse(text=command3))
 # } 
 
