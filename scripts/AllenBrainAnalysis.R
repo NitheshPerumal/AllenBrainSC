@@ -185,9 +185,9 @@ region <- group_by(meta[,c(1,21)], by = 'region_label')[,-3]
 for (i in unique(region$region_label)) {
  command <- paste0(i, "<-subset(region, region_label=='", i, "')")
  eval(parse(text=command))
- command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+ command2 <- paste0(i, "_data<-semi_join(cpm_exp,", i,",by = 'sample_name')")
  eval(parse(text=command2))
- command3 <- paste0(i, "<- prune(",i,",1)")
+ command3 <- paste0(i, "_data_rm<- prune(",i,"_data,1)")
  eval(parse(text=command3))
 }
 
@@ -204,28 +204,28 @@ a1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986018')$path))
 
 
 #Unlab per region
-excit <- subset(meta, class_label == 'Glutamatergic')
-excit <- excit[,c(1,21)]
-for(i in 1:nrow(excit)){
-  excit[i,2] <- switch(excit[i,2],
-                       'MTG' = 'MTG_unlab',
-                       'V1C' = 'V1C_unlab',
-                       'CgG' = 'CgG_unlab',
-                       'M1lm' = 'M1lm_unlab',
-                       'S1ul' = 'S1ul_unlab',
-                       'S1lm' = 'S1lm_unlab',
-                       'M1ul' = 'M1ul_unlab',
-                       'A1C' = 'A1C_unlab')
-}
-
-for (i in unique(excit$region_label)) {
-  command <- paste0(i, "<-subset(excit, region_label=='", i, "')")
-  eval(parse(text=command))
-  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-  eval(parse(text=command2))
-  command3 <- paste0(i, "<- prune(",i,",1)")
-  eval(parse(text=command3))
-}
+# excit <- subset(meta, class_label == 'Glutamatergic')
+# excit <- excit[,c(1,21)]
+# for(i in 1:nrow(excit)){
+#   excit[i,2] <- switch(excit[i,2],
+#                        'MTG' = 'MTG_unlab',
+#                        'V1C' = 'V1C_unlab',
+#                        'CgG' = 'CgG_unlab',
+#                        'M1lm' = 'M1lm_unlab',
+#                        'S1ul' = 'S1ul_unlab',
+#                        'S1lm' = 'S1lm_unlab',
+#                        'M1ul' = 'M1ul_unlab',
+#                        'A1C' = 'A1C_unlab')
+# }
+# 
+# for (i in unique(excit$region_label)) {
+#   command <- paste0(i, "<-subset(excit, region_label=='", i, "')")
+#   eval(parse(text=command))
+#   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+#   eval(parse(text=command2))
+#   command3 <- paste0(i, "<- prune(",i,",1)")
+#   eval(parse(text=command3))
+# }
 
 
 # Analyzing different cutoffs to determine cutoff treshold
@@ -408,18 +408,18 @@ s1lm_summary <- stats(S1lm)
 m1ul_summary <- stats(M1ul)
 a1c_summary <- stats(A1C)
 
+# Unlab by Region Summary
+# mtg_unlab_summary <- stats(MTG_unlab)
+# v1c_unlab_summary <- stats(V1C_unlab)
+# cgg_unlab_summary <- stats(CgG_unlab)
+# m1lm_unlab_summary <- stats(M1lm_unlab)
+# s1ul_unlab_summary <- stats(S1ul_unlab)
+# s1lm_unlab_summary <- stats(S1lm_unlab)
+# m1ul_unlab_summary <- stats(M1ul_unlab)
+# a1c_unlab_summary <- stats(A1C_unlab)
 
-mtg_unlab_summary <- stats(MTG_unlab)
-v1c_unlab_summary <- stats(V1C_unlab)
-cgg_unlab_summary <- stats(CgG_unlab)
-m1lm_unlab_summary <- stats(M1lm_unlab)
-s1ul_unlab_summary <- stats(S1ul_unlab)
-s1lm_unlab_summary <- stats(S1lm_unlab)
-m1ul_unlab_summary <- stats(M1ul_unlab)
-a1c_unlab_summary <- stats(A1C_unlab)
-
-length(unique(c(names(MTG_unlab),names(V1C_unlab), names(CgG_unlab), names(M1lm_unlab), names(S1lm_unlab),
-   names(S1ul_unlab), names(M1ul_unlab), names(A1C_unlab))))
+#length(unique(c(names(MTG_unlab),names(V1C_unlab), names(CgG_unlab), names(M1lm_unlab), names(S1lm_unlab),
+#   names(S1ul_unlab), names(M1ul_unlab), names(A1C_unlab))))
 
 
 # Histograms of Mean - Median to decide central tendency to use
@@ -551,35 +551,33 @@ composition_region <- cbind(features_med_region[,1], composition_region)
 colnames(composition_region)[1] <- 'features'
 
 
-######################################################################
 #Brain region medians for Unlabelled subset
-mtg_med <- left_join(features, mtg_unlab_summary[,c(1,4)], by = 'features')
-v1c_med <- left_join(features, v1c_unlab_summary[,c(1,4)], by = 'features')
-cgg_med <- left_join(features, cgg_unlab_summary[,c(1,4)], by = 'features')
-m1lm_med <- left_join(features, m1lm_unlab_summary[,c(1,4)], by = 'features')
-s1ul_med <- left_join(features, s1ul_unlab_summary[,c(1,4)], by = 'features')
-s1lm_med <- left_join(features, s1lm_unlab_summary[,c(1,4)], by = 'features')
-m1ul_med <- left_join(features, m1ul_unlab_summary[,c(1,4)], by = 'features')
-a1c_med <- left_join(features, a1c_unlab_summary[,c(1,4)], by = 'features')
-
-features_med_region <- cbind(mtg_med[,2], v1c_med[,2], cgg_med[,2],
-                             m1lm_med[,2], s1ul_med[,2], s1lm_med[,2],
-                             m1ul_med[,2], a1c_med[,2])
-features_med_region <- cbind(features, features_med_region)
-features_med_region[is.na(features_med_region)] <- 0
-colnames(features_med_region) <- c('features', 'MTG','V1C','CgG',
-                                   'M1lm', 'S1ul', 'S1lm', 'M1ul', 'A1C')
-features_med_region[,-1] <- 2^features_med_region[,-1] # Undo log transform so x > 0
-features_med_region[features_med_region == 1] <- 0
-features_med_region$sum <- apply(features_med_region[,-1], 1, FUN = sum)
-features_med_region <- features_med_region[-1,]
-
-# Proportion Composition by Median as Cell Type Score
-composition_region <- features_med_region[,c(-1,-10)]/features_med_region[,10]
-composition_region[is.na(composition_region)] <- 0
-composition_region <- cbind(features_med_region[,1], composition_region)
-colnames(composition_region)[1] <- 'features'
-################################################################################
+# mtg_med <- left_join(features, mtg_unlab_summary[,c(1,4)], by = 'features')
+# v1c_med <- left_join(features, v1c_unlab_summary[,c(1,4)], by = 'features')
+# cgg_med <- left_join(features, cgg_unlab_summary[,c(1,4)], by = 'features')
+# m1lm_med <- left_join(features, m1lm_unlab_summary[,c(1,4)], by = 'features')
+# s1ul_med <- left_join(features, s1ul_unlab_summary[,c(1,4)], by = 'features')
+# s1lm_med <- left_join(features, s1lm_unlab_summary[,c(1,4)], by = 'features')
+# m1ul_med <- left_join(features, m1ul_unlab_summary[,c(1,4)], by = 'features')
+# a1c_med <- left_join(features, a1c_unlab_summary[,c(1,4)], by = 'features')
+# 
+# features_med_region <- cbind(mtg_med[,2], v1c_med[,2], cgg_med[,2],
+#                              m1lm_med[,2], s1ul_med[,2], s1lm_med[,2],
+#                              m1ul_med[,2], a1c_med[,2])
+# features_med_region <- cbind(features, features_med_region)
+# features_med_region[is.na(features_med_region)] <- 0
+# colnames(features_med_region) <- c('features', 'MTG','V1C','CgG',
+#                                    'M1lm', 'S1ul', 'S1lm', 'M1ul', 'A1C')
+# features_med_region[,-1] <- 2^features_med_region[,-1] # Undo log transform so x > 0
+# features_med_region[features_med_region == 1] <- 0
+# features_med_region$sum <- apply(features_med_region[,-1], 1, FUN = sum)
+# features_med_region <- features_med_region[-1,]
+# 
+# # Proportion Composition by Median as Cell Type Score
+# composition_region <- features_med_region[,c(-1,-10)]/features_med_region[,10]
+# composition_region[is.na(composition_region)] <- 0
+# composition_region <- cbind(features_med_region[,1], composition_region)
+# colnames(composition_region)[1] <- 'features'
 
 
 # UpSet Plots
@@ -600,12 +598,10 @@ jpeg(file = '/home/nperumal/AllenBrainSC/plots/UpSet_Brain_Region.jpeg')
 upset(as.data.frame(ups_region), sets = names(ups_region)[c(-1,-10)], order.by = 'freq')
 dev.off()
 
-#upset(as.data.frame(ups_region), sets = names(ups_region)[c(-1,-10)], 
-#      order.by = c('freq'),nintersects = NA, keep.order = T)
 
 # Pushing data to synapse -----------------------------------------------------------
 
-synLogin(authToken = "")
+#synLogin(authToken = "")
 
 # Setting Synapse ID's
 parentID = 'syn25881694'
