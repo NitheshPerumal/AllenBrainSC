@@ -112,61 +112,6 @@ cutoff_summ <- function(x){
 }
 
 
-
-for (i in unique(broad_type$class_label)) {
-  command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
-  eval(parse(text=command))
-  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-  eval(parse(text=command2))
-  command4 <- paste0(i,"<-as.data.frame(",i,"[,colSums(",i,"[,-2]) != 0])")
-  eval(parse(text=command4))
-}
-
-
-for (i in unique(sub_type$subclass_label)) {
-  command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
-  eval(parse(text=command))
-  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-  eval(parse(text=command2))
-  command4 <- paste0(i,"<-as.data.frame(",i,"[,colSums(",i,"[,-2]) != 0])")
-  eval(parse(text=command4))
-}
-
-test <- function(x){
-  nonzero <- log2(length(x[x != 0])/length(x))
-}
-
-
-excit_subs <- apply(excit_data_rm[,2:ncol(excit_data_rm)], 2, function(x) test(x))
-hist(excit_subs, 
-     main = 'Excit Nonzero Histogram', xlab = 'log2 percent nonzero')
-
-inhib_subs <- apply(inhib_data_rm[,2:ncol(inhib_data_rm)], 2, function(x) test(x))
-hist(inhib_subs, 
-     main = 'Inhib Nonzero Histogram', xlab = 'log2 percent nonzero')
-
-unlab_subs <- apply(unlab_data_rm[,2:ncol(unlab_data_rm)], 2, function(x) test(x))
-hist(unlab_subs, 
-     main = 'Unlabelled Nonzero Histogram', xlab = 'log2 percent nonzero')
-
-astro_subs <- apply(astro_data_rm[,3:ncol(astro_data_rm)], 2, function(x) test(x))
-hist(astro_subs, 
-     main = 'Astrocytes Nonzero Histogram', xlab = 'log2 percent nonzero', breaks = 35)
-
-oligo_subs <- apply(oligo_data_rm[,3:ncol(oligo_data_rm)], 2, function(x) test(x))
-hist(oligo_subs, 
-     main = 'Oligodendrocyte Nonzero Histogram', xlab = 'log2 percent nonzero', breaks = 35)
-
-opc_subs <- apply(opc_data_rm[,3:ncol(opc_data_rm)], 2, function(x) test(x))
-hist(opc_subs, 
-     main = 'OPC Nonzero Histogram', xlab = 'log2 percent nonzero', breaks = 30)
-
-microglia_subs <- apply(microglia_data_rm[,3:ncol(microglia_data_rm)], 2, function(x) test(x))
-hist(microglia_subs, 
-     main = 'Microglia Nonzero Histogram', xlab = 'log2 percent nonzero')
-
-
-
 # Missing feature pruning from Broad cell types
 broad_type <- as.data.frame(group_by(meta[,c(1,9)], by = 'class_label')[,-3])
 for(i in 1:nrow(broad_type)){
@@ -176,10 +121,10 @@ for(i in 1:nrow(broad_type)){
 }
 for(i in 1:nrow(broad_type)){
   broad_type[i,2] <- switch(broad_type[i,2], 
-                          'GABAergic' = 'inhib_data_rm',
-                          'Glutamatergic' = 'excit_data_rm',
-                          'OPC' = 'opc_data_rm',
-                          'Unlab' = 'unlab_data_rm',
+                          'GABAergic' = 'inhib',
+                          'Glutamatergic' = 'excit',
+                          'OPC' = 'opc',
+                          'Unlab' = 'unlab',
                            NA)
 }
 broad_type <- na.omit(broad_type)
@@ -188,9 +133,9 @@ broad_type <- na.omit(broad_type)
 for (i in unique(broad_type$class_label)) {
   command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
   eval(parse(text=command))
-  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+  command2 <- paste0(i, "_data<-semi_join(cpm_exp,", i,",by = 'sample_name')")
   eval(parse(text=command2))
-  command3 <- paste0(i, "<- prune(",i,",1)")
+  command3 <- paste0(i, "_data_rm<- prune(",i,"_data,1)")
   eval(parse(text=command3))
 }
 
@@ -199,10 +144,10 @@ for (i in unique(broad_type$class_label)) {
 sub_type <- as.data.frame(group_by(meta[,c(1,12)], by = 'class_label')[,-3])
 for(i in 1:nrow(sub_type)){
   sub_type[i,2] <- switch(sub_type[i,2], 
-                      'Astrocyte' = 'astro_data_rm',
-                      'Oligodendrocyte' = 'oligo_data_rm',
-                      'OPC' = 'opc_data_rm',
-                      'Microglia' = 'microglia_data_rm',
+                      'Astrocyte' = 'astro',
+                      'Oligodendrocyte' = 'oligo',
+                      'OPC' = 'opc',
+                      'Microglia' = 'microglia',
                       NA)
 }
 sub_type <- na.omit(sub_type)
@@ -211,142 +156,13 @@ sub_type <- na.omit(sub_type)
 for (i in unique(sub_type$subclass_label)) {
   command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
   eval(parse(text=command))
-  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
+  command2 <- paste0(i, "_data<-semi_join(cpm_exp,", i,",by = 'sample_name')")
   eval(parse(text=command2))
-  command3 <- paste0(i, "<- prune(",i,",1)")
+  command3 <- paste0(i, "_data_rm<- prune(",i,"_data,1)")
   eval(parse(text=command3))
 } 
 
-
-# Analyzing different cutoffs to determine cutoff treshold
-bp_names <<- c()
-z_names <<- c()
-cpm_1_names <<- c()
-cpm_0.5_names <<- c()
-cpm_0.1_names <<- c()
-
-out <- data.frame()
-for (i in unique(broad_type$class_label)) {
-  command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
-  eval(parse(text=command))
-  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-  eval(parse(text=command2))
-  command3 <- paste0("out <- rbind(out,cutoff_summ(",i,"))")
-  eval(parse(text=command3))
-}
-
-for (i in unique(sub_type$subclass_label)) {
-  command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
-  eval(parse(text=command))
-  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-  eval(parse(text=command2))
-  command3 <- paste0("out <- rbind(out,cutoff_summ(",i,"))")
-  eval(parse(text=command3))
-}
-
-unique_features <- cbind(length(unique(bp_names)),length(unique(z_names)),
-                         length(unique(cpm_1_names)),length(unique(cpm_0.5_names)),
-                         length(unique(cpm_0.1_names)))
-colnames(unique_features) <- colnames(out)
-
-cutoff_analysis <- rbind(out, as.data.frame(unique_features))
-
-cell_types <- as.data.frame(c(unique(broad_type$class_label), 
-                              unique(sub_type$subclass_label),
-                              'sum'))
-cutoff_analysis <- cbind(cell_types, cutoff_analysis)
-colnames(cutoff_analysis)[1] <- 'Cell_type'
-
-
-# Quantile based pruning
-quant <- function(x,z){
-  count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, 
-                                               function(x) unname(quantile(x, c(.8)))))))
-  pruned <- as.data.frame(count[,count >= z])
-  out <- as.data.frame(x[,c('sample_name',names(pruned))])
-  return(out)
-}
-
-quant_0.1_names <<- c()
-quant_0.5_names <<- c()
-quant_1_names <<- c()
-
-quant_summ <- function(x){
-  
-  quant_0.1 <- quant(x,0.1)
-  quant_0.1_names <<- c(quant_0.1_names, names(quant_0.1))
-  quant_0.1 <- ncol(quant_0.1)
-  
-  quant_0.5 <- quant(x,0.5)
-  quant_0.5_names <<- c(quant_0.5_names, names(quant_0.5))
-  quant_0.5 <- ncol(quant_0.5)
-  
-  quant_1 <- quant(x,1)
-  quant_1_names <<- c(quant_1_names, names(quant_1))
-  quant_1 <- ncol(quant_1)
-  
-  
-  
-  return(as.data.frame(cbind(quant_1,quant_0.5,quant_0.1)))
-}
-
-quant_out <- data.frame()
-for (i in unique(broad_type$class_label)) {
-  command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
-  eval(parse(text=command))
-  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-  eval(parse(text=command2))
-  command3 <- paste0("quant_out <- rbind(quant_out,quant_summ(",i,"))")
-  eval(parse(text=command3))
-}
-
-for (i in unique(sub_type$subclass_label)) {
-  command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
-  eval(parse(text=command))
-  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-  eval(parse(text=command2))
-  command3 <- paste0("quant_out <- rbind(quant_out,quant_summ(",i,"))")
-  eval(parse(text=command3))
-}
-
-unique_features <- cbind(length(unique(quant_1_names)),length(unique(quant_0.5_names)),
-                         length(unique(quant_0.1_names)))
-colnames(unique_features) <- colnames(quant_out)
-
-quant_analysis <- rbind(quant_out, as.data.frame(unique_features))
-
-cell_types <- as.data.frame(c(unique(broad_type$class_label), 
-                              unique(sub_type$subclass_label),
-                              'sum'))
-quant_analysis <- cbind(cell_types, quant_analysis)
-colnames(quant_analysis)[1] <- 'Cell_type'
-#
-
-for (i in unique(broad_type$class_label)) {
-  command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
-  eval(parse(text=command))
-  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-  eval(parse(text=command2))
-  command3 <- paste0(i,"<- quant(",i,",0.5)")
-  eval(parse(text=command3))
-}
-
-for (i in unique(sub_type$subclass_label)) {
-  command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
-  eval(parse(text=command))
-  command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-  eval(parse(text=command2))
-  command3 <- paste0(i,"<- quant(",i,",0.5)")
-  eval(parse(text=command3))
-}
-
-
-test_dat <- apply(excit_data_rm[,-1],2, FUN=median)
-hist(test_dat, breaks = 80, xlim = c(0,5000))
-sum(test_dat == 0)
-
-################################################################################
-
+cell_type_list <- c(unique(broad_type$class_label),unique(sub_type$subclass_label))
 
 # Missing feature pruned data pulling from synapse
 excit_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979729')$path))[,c(-1,-2)]
@@ -410,6 +226,134 @@ for (i in unique(excit$region_label)) {
   command3 <- paste0(i, "<- prune(",i,",1)")
   eval(parse(text=command3))
 }
+
+
+# Analyzing different cutoffs to determine cutoff treshold
+bp_names <<- c()
+z_names <<- c()
+cpm_1_names <<- c()
+cpm_0.5_names <<- c()
+cpm_0.1_names <<- c()
+
+out <- data.frame()
+for (i in cell_type_list){
+  command3 <- paste0("out <- rbind(out,cutoff_summ(",i,"_data))")
+  eval(parse(text=command3))
+}
+
+unique_features <- cbind(length(unique(bp_names)),length(unique(z_names)),
+                         length(unique(cpm_1_names)),length(unique(cpm_0.5_names)),
+                         length(unique(cpm_0.1_names)))
+colnames(unique_features) <- colnames(out)
+
+cutoff_analysis <- rbind(out, as.data.frame(unique_features))
+
+cell_types <- as.data.frame(c(unique(broad_type$class_label), 
+                              unique(sub_type$subclass_label),
+                              'sum'))
+cutoff_analysis <- cbind(cell_types, cutoff_analysis)
+colnames(cutoff_analysis)[1] <- 'Cell_type'
+
+
+# Quantile based pruning
+quant <- function(x,z){
+  count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, 
+                                               function(x) unname(quantile(x, c(.8)))))))
+  pruned <- as.data.frame(count[,count >= z])
+  out <- as.data.frame(x[,c('sample_name',names(pruned))])
+  return(out)
+}
+
+quant_0.1_names <<- c()
+quant_0.5_names <<- c()
+quant_1_names <<- c()
+
+quant_summ <- function(x){
+  
+  quant_0.1 <- quant(x,0.1)
+  quant_0.1_names <<- c(quant_0.1_names, names(quant_0.1))
+  quant_0.1 <- ncol(quant_0.1)
+  
+  quant_0.5 <- quant(x,0.5)
+  quant_0.5_names <<- c(quant_0.5_names, names(quant_0.5))
+  quant_0.5 <- ncol(quant_0.5)
+  
+  quant_1 <- quant(x,1)
+  quant_1_names <<- c(quant_1_names, names(quant_1))
+  quant_1 <- ncol(quant_1)
+  
+  
+  
+  return(as.data.frame(cbind(quant_1,quant_0.5,quant_0.1)))
+}
+
+quant_out <- data.frame()
+for (i in cell_type_list) {
+  command3 <- paste0("quant_out <- rbind(quant_out,quant_summ(",i,"_data))")
+  eval(parse(text=command3))
+}
+
+unique_features <- cbind(length(unique(quant_1_names)),length(unique(quant_0.5_names)),
+                         length(unique(quant_0.1_names)))
+colnames(unique_features) <- colnames(quant_out)
+
+quant_analysis <- rbind(quant_out, as.data.frame(unique_features))
+
+cell_types <- as.data.frame(c(unique(broad_type$class_label), 
+                              unique(sub_type$subclass_label),
+                              'sum'))
+quant_analysis <- cbind(cell_types, quant_analysis)
+colnames(quant_analysis)[1] <- 'Cell_type'
+
+
+for (i in cell_type_list) {
+  command3 <- paste0(i,"_quant<- quant(",i,"_data,0.5)")
+  eval(parse(text=command3))
+}
+
+hist_quant <- apply(excit_quant[,c(-1,-2)],2, FUN=median)
+hist(hist_quant, breaks = 80, xlim = c(0,5000))
+sum(hist_quant == 0)
+
+
+# Nonzero Histograms
+for (i in cell_type_list) {
+  command4 <- paste0(i,"_hist<-as.data.frame(",i,"_data[,colSums(",i,"_data[,-2]) != 0])")
+  eval(parse(text=command4))
+}
+
+nonzero_hist <- function(x){
+  nonzero <- log2(length(x[x != 0])/length(x))
+}
+
+
+excit_subs <- apply(excit_hist[,2:ncol(excit_hist)], 2, function(x) nonzero_hist(x))
+hist(excit_subs, 
+     main = 'Excit Nonzero Histogram', xlab = 'log2 percent nonzero')
+
+inhib_subs <- apply(inhib_hist[,2:ncol(inhib_hist)], 2, function(x) nonzero_hist(x))
+hist(inhib_subs, 
+     main = 'Inhib Nonzero Histogram', xlab = 'log2 percent nonzero')
+
+unlab_subs <- apply(unlab_hist[,2:ncol(unlab_hist)], 2, function(x) nonzero_hist(x))
+hist(unlab_subs, 
+     main = 'Unlabelled Nonzero Histogram', xlab = 'log2 percent nonzero')
+
+astro_subs <- apply(astro_hist[,3:ncol(astro_hist)], 2, function(x) nonzero_hist(x))
+hist(astro_subs, 
+     main = 'Astrocytes Nonzero Histogram', xlab = 'log2 percent nonzero', breaks = 35)
+
+oligo_subs <- apply(oligo_hist[,3:ncol(oligo_hist)], 2, function(x) nonzero_hist(x))
+hist(oligo_subs, 
+     main = 'Oligodendrocyte Nonzero Histogram', xlab = 'log2 percent nonzero', breaks = 35)
+
+opc_subs <- apply(opc_hist[,3:ncol(opc_hist)], 2, function(x) nonzero_hist(x))
+hist(opc_subs, 
+     main = 'OPC Nonzero Histogram', xlab = 'log2 percent nonzero', breaks = 30)
+
+microglia_subs <- apply(microglia_hist[,3:ncol(microglia_hist)], 2, function(x) nonzero_hist(x))
+hist(microglia_subs, 
+     main = 'Microglia Nonzero Histogram', xlab = 'log2 percent nonzero')
 
 
 # Function to find mean of every column
