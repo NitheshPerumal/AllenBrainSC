@@ -29,21 +29,12 @@ gene_exp <- as.data.frame(data.table::fread(
 
 # Analysis -----------------------------------------------------------------
 
-# Parallel Processing Setup
-#ncore <- as.numeric(detectCores()-1)
-#cl <- makeCluster(ncore)
-
 # Counts Per Million (CPM) Normalization by sample 
 CPM <- function(x){
   den <- sum(x)/(10^6)
   x/den
 }
 
-# More efficient but not working
-#cpm_exp <- as.data.frame(t(parallel::parApply(cl, gene_exp[,-1], 1, CPM)))
-#stopCluster(cl)
-
-# Less Efficient but working
 #cpm_exp <- as.data.frame(t(apply(gene_exp[,-1], 1, CPM)))
 #cpm_exp <- cbind(gene_exp[,1], cpm_exp)
 #colnames(cpm_exp)[1] = "sample_name"
@@ -86,6 +77,9 @@ prune <- function(x,z){
   return(pruned)
 }
 
+# Summary of Cutoffs
+# @param x datframe of gene expression matrix
+# @return summary table of pruning 
 cutoff_summ <- function(x){
   y <- x[,-2]
   
@@ -256,6 +250,9 @@ colnames(cutoff_analysis)[1] <- 'Cell_type'
 
 
 # Quantile based pruning
+# Prune features based on quantile cutoff 0.8
+# @param x datframe of gene expression matrix
+# @return pruned dataframe of gene expression matrix with missing features removed
 quant <- function(x,z){
   count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, 
                                                function(x) unname(quantile(x, c(.8)))))))
@@ -268,6 +265,9 @@ quant_0.1_names <<- c()
 quant_0.5_names <<- c()
 quant_1_names <<- c()
 
+# Summary of Quantile pruning for different cutoffs
+# @param x datframe of gene expression matrix
+# @return dataframe with summary
 quant_summ <- function(x){
   
   quant_0.1 <- quant(x,0.1)
@@ -306,12 +306,23 @@ quant_analysis <- cbind(cell_types, quant_analysis)
 colnames(quant_analysis)[1] <- 'Cell_type'
 
 
+# From quant_summ analysis 0.5 has been determined to be good cutoff
+zero_list <<- c()
 for (i in cell_type_list) {
   command3 <- paste0(i,"_quant<- quant(",i,"_data,0.5)")
   eval(parse(text=command3))
+  command5 <- paste0("zero_list<-append(zero_list, sum(apply(",i,"_quant[,c(-1,-2)],2,FUN=median) == 0))")
+  eval(parse(text=command5))
 }
 
-hist_quant <- apply(excit_quant[,c(-1,-2)],2, FUN=median)
+zero_quant <- cbind(as.data.frame(cell_type_list),as.data.frame(zero_list))
+zero_quant <- cbind(zero_quant,quant_analysis$quant_0.5[-8],
+                    cutoff_analysis$cpm_0.5[-8])
+colnames(zero_quant) <- c('Cell_Type','Median_0','quant_0.5','cpm_0.5')
+zero_quant <- zero_quant[,c(1,3,2,4)]
+
+
+hist_quant <- apply(inhib_quant[,c(-1,-2)],2, FUN=median)
 hist(hist_quant, breaks = 80, xlim = c(0,5000))
 sum(hist_quant == 0)
 
@@ -325,7 +336,6 @@ for (i in cell_type_list) {
 nonzero_hist <- function(x){
   nonzero <- log2(length(x[x != 0])/length(x))
 }
-
 
 excit_subs <- apply(excit_hist[,2:ncol(excit_hist)], 2, function(x) nonzero_hist(x))
 hist(excit_subs, 
