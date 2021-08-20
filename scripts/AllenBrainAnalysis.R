@@ -122,7 +122,7 @@ for(i in 1:nrow(broad_type)){
                            NA)
 }
 broad_type <- na.omit(broad_type)
- 
+
 
 for (i in unique(broad_type$class_label)) {
   command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
@@ -222,6 +222,7 @@ a1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986018')$path))
 # }
 
 
+
 # Analyzing different cutoffs to determine cutoff treshold
 bp_names <<- c()
 z_names <<- c()
@@ -307,6 +308,7 @@ colnames(quant_analysis)[1] <- 'Cell_type'
 
 
 # From quant_summ analysis 0.5 has been determined to be good cutoff
+# Running quantile pruning and finding number of features with median = 0
 zero_list <<- c()
 for (i in cell_type_list) {
   command3 <- paste0(i,"_quant<- quant(",i,"_data,0.5)")
@@ -315,6 +317,10 @@ for (i in cell_type_list) {
   eval(parse(text=command5))
 }
 
+# Zero_quant is the summary dataframe with each cell type
+# the number of features quant pruned with 0.5 cutoff, the
+# number of features with median 0 in quant pruning, and the
+# number of features after median pruning with 0.5 cutoff
 zero_quant <- cbind(as.data.frame(cell_type_list),as.data.frame(zero_list))
 zero_quant <- cbind(zero_quant,quant_analysis$quant_0.5[-8],
                     cutoff_analysis$cpm_0.5[-8])
@@ -322,9 +328,49 @@ colnames(zero_quant) <- c('Cell_Type','Median_0','quant_0.5','cpm_0.5')
 zero_quant <- zero_quant[,c(1,3,2,4)]
 
 
-hist_quant <- apply(inhib_quant[,c(-1,-2)],2, FUN=median)
-hist(hist_quant, breaks = 80, xlim = c(0,5000))
-sum(hist_quant == 0)
+# Fine grain analysis
+exc_l3_cgg <- as.data.frame(subset(meta, cluster_label == 'Exc L3 LINC00507 PSRC1'
+                                   & region_label == 'CgG')[,1])
+colnames(exc_l3_cgg) <- 'sample_name'
+exc_l3_cgg_data <- semi_join(cpm_exp, exc_l3_cgg, by = 'sample_name')
+exc_l3_cgg_data_rm <- prune(exc_l3_cgg_data,0.5)
+exc_l3_cgg_quant <- quant(exc_l3_cgg_data,0.5)
+exc_l3_cgg_med_z <-sum(apply(exc_l3_cgg_quant[,c(-1,-2)],2,FUN=median) == 0)
+exc_l3_cgg_subs <- c('Exc L3 CgG',ncol(exc_l3_cgg_quant),exc_l3_cgg_med_z,ncol(exc_l3_cgg_data_rm))
+
+
+astro_l1_cgg <- as.data.frame(subset(meta, cluster_label == 'Astro L1-6 FGFR3 ETNPPL' 
+                                     & region_label == 'CgG')[,1])
+colnames(astro_l1_cgg) <- 'sample_name'
+astro_l1_cgg_data <- semi_join(cpm_exp, astro_l1_cgg, by = 'sample_name')
+astro_l1_cgg_data_rm <- prune(astro_l1_cgg_data, 0.5)
+astro_l1_cgg_quant <- quant(astro_l1_cgg_data,0.5)
+astro_l1_cgg_med_z <- sum(apply(astro_l1_cgg_quant[,c(-1,-2)],2,FUN=median) == 0)
+astro_l1_cgg_subs <- c('Astro L1 CgG',ncol(astro_l1_cgg_quant),astro_l1_cgg_med_z,ncol(astro_l1_cgg_data_rm))
+
+
+astro_l1_mtg <- as.data.frame(subset(meta, cluster_label == 'Astro L1-6 FGFR3 ETNPPL' 
+                                     & region_label == 'MTG')[,1])
+colnames(astro_l1_mtg) <- 'sample_name'
+astro_l1_mtg_data <- semi_join(cpm_exp, astro_l1_mtg, by = 'sample_name')
+astro_l1_mtg_data_rm <- prune(astro_l1_mtg_data,0.5)
+astro_l1_mtg_quant <- quant(astro_l1_mtg_data,0.5)
+astro_l1_mtg_med_z <- sum(apply(astro_l1_mtg_quant[,c(-1,-2)],2,FUN=median) == 0)
+astro_l1_mtg_subs <- c('Astro L1 MTG',ncol(astro_l1_mtg_quant),astro_l1_mtg_med_z,ncol(astro_l1_mtg_data_rm))
+
+
+exc_l2_mtg <- as.data.frame(subset(meta, cluster_label == 'Exc L2-3 LINC00507 RPL9P17'
+                                   & region_label == 'MTG')[,1])
+colnames(exc_l2_mtg) <- 'sample_name'
+exc_l2_mtg_data <- semi_join(cpm_exp, exc_l2_mtg, by = 'sample_name')
+exc_l2_mtg_data_rm <- prune(exc_l2_mtg_data,0.5)
+exc_l2_mtg_quant <- quant(exc_l2_mtg_data,0.5)
+exc_l2_mtg_med_z <- sum(apply(exc_l2_mtg_quant[,c(-1,-2)],2,FUN=median) == 0)
+exc_l2_mtg_subs <- c('Exc L2 MTG',ncol(exc_l2_mtg_quant),exc_l2_mtg_med_z,ncol(exc_l2_mtg_data_rm))
+
+fine_grain_analysis <- rbind(as.data.frame(t(exc_l3_cgg_subs)), as.data.frame(t(astro_l1_cgg_subs)),
+                             as.data.frame(t(astro_l1_mtg_subs)), as.data.frame(t(exc_l2_mtg_subs)))
+colnames(fine_grain_analysis) <- c('Type','quant_0.5','median_0','cpm_0.5')
 
 
 # Nonzero Histograms
@@ -607,6 +653,7 @@ dev.off()
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/UpSet_Brain_Region.jpeg')
 upset(as.data.frame(ups_region), sets = names(ups_region)[c(-1,-10)], order.by = 'freq')
 dev.off()
+
 
 
 # Pushing data to synapse -----------------------------------------------------------
