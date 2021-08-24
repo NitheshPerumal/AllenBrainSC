@@ -236,6 +236,15 @@ for (i in cell_type_list){
   eval(parse(text=command3))
 }
 
+unique_features <- cbind(as.numeric(table(table(bp_names))[1]),
+                         as.numeric(table(table(z_names))[1]),
+                         as.numeric(table(table(cpm_1_names))[1]), 
+                         as.numeric(table(table(cpm_0.5_names))[1]),
+                         as.numeric(table(table(cpm_0.1_names))[1]))
+
+cutoff_analysis <- cbind(as.data.frame(cell_type_list),out)
+cutoff_analysis <- rbind(cutoff_analysis,c('unique_features',unique_features))
+ 
 unique_features <- cbind(length(unique(bp_names)),length(unique(z_names)),
                          length(unique(cpm_1_names)),length(unique(cpm_0.5_names)),
                          length(unique(cpm_0.1_names)))
@@ -294,17 +303,12 @@ for (i in cell_type_list) {
   eval(parse(text=command3))
 }
 
-unique_features <- cbind(length(unique(quant_1_names)),length(unique(quant_0.5_names)),
-                         length(unique(quant_0.1_names)))
-colnames(unique_features) <- colnames(quant_out)
+unique_features <- cbind(as.numeric(table(table(quant_1_names))[1]),
+                         as.numeric(table(table(quant_0.5_names))[1]),
+                         as.numeric(table(table(quant_1_names))[1]))
 
-quant_analysis <- rbind(quant_out, as.data.frame(unique_features))
-
-cell_types <- as.data.frame(c(unique(broad_type$class_label), 
-                              unique(sub_type$subclass_label),
-                              'sum'))
-quant_analysis <- cbind(cell_types, quant_analysis)
-colnames(quant_analysis)[1] <- 'Cell_type'
+quant_analysis <- cbind(as.data.frame(cell_type_list),quant_out)
+quant_analysis <- rbind(quant_analysis,c('unique_features',unique_features))
 
 
 # From quant_summ analysis 0.5 has been determined to be good cutoff
@@ -368,9 +372,34 @@ exc_l2_mtg_quant <- quant(exc_l2_mtg_data,0.5)
 exc_l2_mtg_med_z <- sum(apply(exc_l2_mtg_quant[,c(-1,-2)],2,FUN=median) == 0)
 exc_l2_mtg_subs <- c('Exc L2 MTG',ncol(exc_l2_mtg_quant),exc_l2_mtg_med_z,ncol(exc_l2_mtg_data_rm))
 
+exc_overlap_feature <- c(names(exc_l2_mtg_quant[,c(-1,-2)]), names(exc_l3_cgg_quant[,c(-1,-2)]))
+exc_overlap_feature <- table(table(exc_overlap_feature))[2]
+
+astro_overlap_feature <- c(names(astro_l1_cgg_quant[,c(-1,-2)]), names(astro_l1_mtg_quant[c(-1,-2)]))
+astro_overlap_feature <- table(table(astro_overlap_feature))[2]
+
 fine_grain_analysis <- rbind(as.data.frame(t(exc_l3_cgg_subs)), as.data.frame(t(astro_l1_cgg_subs)),
                              as.data.frame(t(astro_l1_mtg_subs)), as.data.frame(t(exc_l2_mtg_subs)))
 colnames(fine_grain_analysis) <- c('Type','quant_0.5','median_0','cpm_0.5')
+
+fine_grain_list <- c('exc_l3_cgg_data','astro_l1_cgg_data','astro_l1_mtg_data','exc_l2_mtg_data')
+
+# Fine grain
+quant_0.1_names <<- c()
+quant_0.5_names <<- c()
+quant_1_names <<- c()
+fine_grain_quant_out <- data.frame()
+for (i in fine_grain_list) {
+  command3 <- paste0("fine_grain_quant_out <- rbind(fine_grain_quant_out,quant_summ(",i,"))")
+  eval(parse(text=command3))
+}
+
+unique_features <- cbind(as.numeric(table(table(quant_1_names))[1]),
+                         as.numeric(table(table(quant_0.5_names))[1]),
+                         as.numeric(table(table(quant_1_names))[1]))
+
+fine_grain_quant_summ <- cbind(as.data.frame(fine_grain_list),fine_grain_quant_out)
+fine_grain_quant_summ <- rbind(fine_grain_analysis,c('unique_features',unique_features))
 
 
 # Nonzero Histograms
