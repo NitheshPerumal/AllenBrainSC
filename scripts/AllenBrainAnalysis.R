@@ -13,7 +13,8 @@ library(data.table)
 library(parallel)
 library(UpSetR)
 library(psych)
-
+source("AllenBrainSC/scripts/functions.R")
+ 
 # Load Data -----------------------------------------------------------------
 
 # Metadata for Allen Brain dataset
@@ -28,12 +29,6 @@ gene_exp <- as.data.frame(data.table::fread(
 )
 
 # Analysis -----------------------------------------------------------------
-
-# Counts Per Million (CPM) Normalization by sample 
-CPM <- function(x){
-  den <- sum(x)/(10^6)
-  x/den
-}
 
 #cpm_exp <- as.data.frame(t(apply(gene_exp[,-1], 1, CPM)))
 #cpm_exp <- cbind(gene_exp[,1], cpm_exp)
@@ -65,45 +60,6 @@ cell_type <- as.data.frame.matrix(xtabs(formula = ~cell_type_accession_label+cla
 cell_type_sub <- as.data.frame.matrix(xtabs(formula = ~cell_type_accession_label+subclass_label, meta))
 write.csv(cell_type, file = 'cell_type_eda.csv', quote = FALSE)
 write.csv(cell_type_sub, file = 'cell_type_sub_eda.csv', quote = FALSE)
-
-
-# Removing missing features if 50% or more instances are <= 1 CPM
-# @param x datframe of gene expression matrix
-# @return pruned dataframe of gene expression matrix with missing features removed
-prune <- function(x,z){
-  count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, FUN = median))))
-  pruned <- as.data.frame(count[,!(count <= z)])
-  pruned <- x[,c('sample_name',names(pruned))]
-  return(pruned)
-}
-
-# Summary of Cutoffs
-# @param x datframe of gene expression matrix
-# @return summary table of pruning 
-cutoff_summ <- function(x){
-  y <- x[,-2]
-  
-  bp <- ncol(y)
-  bp_names <<- c(bp_names,names(y))
-  
-  z <- as.data.frame(y[,colSums(y) != 0])
-  z_names <<- c(z_names,names(z))
-  z <- ncol(z)
-  
-  cpm_1 <- prune(x,1)
-  cpm_1_names <<- c(cpm_1_names, names(cpm_1))
-  cpm_1 <- ncol(cpm_1)
-  
-  cpm_0.5 <- prune(x,0.5)
-  cpm_0.5_names <<- c(cpm_0.5_names, names(cpm_0.5))
-  cpm_0.5 <- ncol(cpm_0.5)
-  
-  cpm_0.1 <- prune(x,0.1)
-  cpm_0.1_names <<- c(cpm_0.1_names, names(cpm_0.1))
-  cpm_0.1 <- ncol(cpm_0.1)
-  
-  return(as.data.frame(cbind(bp,z,cpm_1,cpm_0.5,cpm_0.1)))
-}
 
 
 # Missing feature pruning from Broad cell types
@@ -222,7 +178,6 @@ a1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986018')$path))
 # }
 
 
-
 # Analyzing different cutoffs to determine cutoff treshold
 bp_names <<- c()
 z_names <<- c()
@@ -238,64 +193,17 @@ for (i in cell_type_list){
 
 unique_features <- cbind(as.numeric(table(table(bp_names))[1]),
                          as.numeric(table(table(z_names))[1]),
-                         as.numeric(table(table(cpm_1_names))[1]), 
+                         as.numeric(table(table(cpm_1_names))[1]),
                          as.numeric(table(table(cpm_0.5_names))[1]),
                          as.numeric(table(table(cpm_0.1_names))[1]))
 
 cutoff_analysis <- cbind(as.data.frame(cell_type_list),out)
 cutoff_analysis <- rbind(cutoff_analysis,c('unique_features',unique_features))
- 
-unique_features <- cbind(length(unique(bp_names)),length(unique(z_names)),
-                         length(unique(cpm_1_names)),length(unique(cpm_0.5_names)),
-                         length(unique(cpm_0.1_names)))
-colnames(unique_features) <- colnames(out)
 
-cutoff_analysis <- rbind(out, as.data.frame(unique_features))
-
-cell_types <- as.data.frame(c(unique(broad_type$class_label), 
-                              unique(sub_type$subclass_label),
-                              'sum'))
-cutoff_analysis <- cbind(cell_types, cutoff_analysis)
-colnames(cutoff_analysis)[1] <- 'Cell_type'
-
-
-# Quantile based pruning
-# Prune features based on quantile cutoff 0.8
-# @param x datframe of gene expression matrix
-# @return pruned dataframe of gene expression matrix with missing features removed
-quant <- function(x,z){
-  count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, 
-                                               function(x) unname(quantile(x, c(.8)))))))
-  pruned <- as.data.frame(count[,count >= z])
-  out <- as.data.frame(x[,c('sample_name',names(pruned))])
-  return(out)
-}
-
+# Quantile cutoff summary 
 quant_0.1_names <<- c()
 quant_0.5_names <<- c()
 quant_1_names <<- c()
-
-# Summary of Quantile pruning for different cutoffs
-# @param x datframe of gene expression matrix
-# @return dataframe with summary
-quant_summ <- function(x){
-  
-  quant_0.1 <- quant(x,0.1)
-  quant_0.1_names <<- c(quant_0.1_names, names(quant_0.1))
-  quant_0.1 <- ncol(quant_0.1)
-  
-  quant_0.5 <- quant(x,0.5)
-  quant_0.5_names <<- c(quant_0.5_names, names(quant_0.5))
-  quant_0.5 <- ncol(quant_0.5)
-  
-  quant_1 <- quant(x,1)
-  quant_1_names <<- c(quant_1_names, names(quant_1))
-  quant_1 <- ncol(quant_1)
-  
-  
-  
-  return(as.data.frame(cbind(quant_1,quant_0.5,quant_0.1)))
-}
 
 quant_out <- data.frame()
 for (i in cell_type_list) {
@@ -384,7 +292,7 @@ colnames(fine_grain_analysis) <- c('Type','quant_0.5','median_0','cpm_0.5')
 
 fine_grain_list <- c('exc_l3_cgg_data','astro_l1_cgg_data','astro_l1_mtg_data','exc_l2_mtg_data')
 
-# Fine grain
+# Fine grain quantile summary
 quant_0.1_names <<- c()
 quant_0.5_names <<- c()
 quant_1_names <<- c()
@@ -441,32 +349,7 @@ hist(microglia_subs,
      main = 'Microglia Nonzero Histogram', xlab = 'log2 percent nonzero')
 
 
-# Function to find mean of every column
-# @param x dataframe of gene matrix to generate summary statistics for
-# @return out dataframe of summary statistics
-stats <- function(x){
-  y <- x[,-1]
-  
-  wm <- as.data.frame(apply(y, 2, function(x) log2(mean(winsor(x, trim = 0.05, na.rm = TRUE)))))
-  colnames(wm)[1] <- 'wins_mean'
-  
-  m <- as.data.frame(apply(y, 2, function(x) log2(as.numeric(mean(x)))))
-  colnames(m)[1] <- 'mean'
-  
-  med <- as.data.frame(apply(y, 2, function(x) log2(as.numeric(median(x)))))
-  colnames(med)[1] <- 'median'
-  
-  std_dev <- as.data.frame(apply(y, 2, FUN = sd))
-  colnames(std_dev)[1] <- 'std_dev'
-  
-  feature_name <- as.data.frame(rownames(m))
-  colnames(feature_name)[1] <- 'features'
-  
-  out <- cbind(feature_name, wm, m, med, m-med, std_dev)
-  colnames(out)[5] <- 'diff'
-  return(out)
-}
-
+# Generating summary statistics 
 excit_summary <- stats(excit_data_rm)
 unlab_summary <- stats(unlab_data_rm)
 inhib_summary <- stats(inhib_data_rm)
@@ -502,9 +385,6 @@ a1c_summary <- stats(A1C)
 # s1lm_unlab_summary <- stats(S1lm_unlab)
 # m1ul_unlab_summary <- stats(M1ul_unlab)
 # a1c_unlab_summary <- stats(A1C_unlab)
-
-#length(unique(c(names(MTG_unlab),names(V1C_unlab), names(CgG_unlab), names(M1lm_unlab), names(S1lm_unlab),
-#   names(S1ul_unlab), names(M1ul_unlab), names(A1C_unlab))))
 
 
 # Histograms of Mean - Median to decide central tendency to use
