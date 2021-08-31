@@ -2,7 +2,7 @@
 # https://portal.brain-map.org/atlases-and-data/rnaseq/human-multiple-cortical-areas-smart-seq
 
 
-# Libraries ----------------------------------------------------------------
+# Libraries --------------------------------------------------------------------
 
 library(tidyverse)
 library(synapser)
@@ -14,31 +14,57 @@ library(parallel)
 library(UpSetR)
 library(psych)
 source("AllenBrainSC/scripts/functions.R")
- 
-# Load Data -----------------------------------------------------------------
+
+
+# Load Data --------------------------------------------------------------------
 
 # Metadata for Allen Brain dataset
 #meta <- read.csv("rstudio/metadata.csv",header = TRUE, sep = ',')
-meta <- as.data.frame(data.table::fread(synapser::synGet('syn25883034')$path))
+meta <- as.data.frame(
+  data.table::fread(
+    synapser::synGet('syn25883034')$path
+  )
+)
+
+# Clean the Metadata
+#Remove leading/trailing white space and replace spaces with '_'
+meta <- as.data.frame(apply( meta, 2, rep_space ))
+
+#Identify Broad Cell Types
+meta$broad_cell <- do.call(
+  rbind,
+  stringr::str_split(
+    meta$cluster_label,
+    '_', 
+    n = 2, 
+    simplify = FALSE
+  )
+)[,1]
+
+meta$broad_cell[is.na(meta$broad_cell)] <- 'Unk'
+
+meta[ is.na(meta$cell_type_alias_label),]$cell_type_alias_label <- 
+  meta[ is.na(meta$cell_type_alias_label),]$outlier_type
+
 
 # Gene expression Matrix
 #gene_exp <- read.csv("rstudio/matrix.csv", sep = ',')
-gene_exp <- as.data.frame(data.table::fread(
+gene_exp <- as.data.frame(
+  data.table::fread(
     synapser::synGet('syn25883506')$path
   )
 )
 
-# Analysis -----------------------------------------------------------------
+# Assign row names
+row.names(gene_exp) <- gene_exp$sample_name
+gene_exp <- as.data.frame(gene_exp[,2:dim(gene_exp)[2]])
+# transpose - assigns gene features to rows, cell IDs to columns
+gene_exp <- as.data.frame(t(gene_exp))
+# remove gene features with no counts in any cell
+gene_exp <- gene_exp[ rowSums(gene_exp != 0) > 0,] 
 
-#cpm_exp <- as.data.frame(t(apply(gene_exp[,-1], 1, CPM)))
-#cpm_exp <- cbind(gene_exp[,1], cpm_exp)
-#colnames(cpm_exp)[1] = "sample_name"
 
-# Getting Normalized data from Synapse
-cpm_exp <- as.data.frame(data.table::fread(synapser::synGet('syn25976164')$path))
-
-remove(gene_exp) # Removing un normalized expression matrix to save memory
-
+# Initial EDA ------------------------------------------------------------------
 
 # Some Exploratory Analysis used to determine how to distinguish cell types
 # Counts of Broad Cell Types based on Brain Region
@@ -62,132 +88,98 @@ write.csv(cell_type, file = 'cell_type_eda.csv', quote = FALSE)
 write.csv(cell_type_sub, file = 'cell_type_sub_eda.csv', quote = FALSE)
 
 
-# Missing feature pruning from Broad cell types
-broad_type <- as.data.frame(group_by(meta[,c(1,9)], by = 'class_label')[,-3])
-for(i in 1:nrow(broad_type)){
-  if(broad_type[i,2] == ''){
-    broad_type[i,2] <- 'Unlab'
-  }
-}
-for(i in 1:nrow(broad_type)){
-  broad_type[i,2] <- switch(broad_type[i,2], 
-                          'GABAergic' = 'inhib',
-                          'Glutamatergic' = 'excit',
-                          'OPC' = 'opc',
-                          'Unlab' = 'unlab',
-                           NA)
-}
-broad_type <- na.omit(broad_type)
+# Analysis ---------------------------------------------------------------------
+
+# Operational Definitions used going forward:
+# Broad Cell Types (7):
+# Excitatory, Inhibitory, Unlabelled, Oligo, OPC, Astro, Microglia
+
+# Specific Cell Types:
+# Refer to Broad Cell type + Tissue Location + 2 Markers
+# Ex: Astro L1-6 FGFR3 ETNPPL
 
 
-for (i in unique(broad_type$class_label)) {
-  command <- paste0(i, "<-subset(broad_type, class_label=='", i, "')")
-  eval(parse(text=command))
-  command2 <- paste0(i, "_data<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-  eval(parse(text=command2))
-  command3 <- paste0(i, "_data_rm<- prune(",i,"_data,1)")
-  eval(parse(text=command3))
-}
+# Filtering by Broad cell type CPM normalization and Pruning Missing features
+exc <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Exc')
+inh <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Inh')
+unk <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Unk')
+astro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Astro')
+oligo <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Oligo')
+opc <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'OPC')
+micro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Micro')
+endo <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Endo')
+vlmc <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'VLMC')
+peri <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Peri')
 
-
-# Non Neuronal specific cell types feature pruning (decided based on EDA)
-sub_type <- as.data.frame(group_by(meta[,c(1,12)], by = 'class_label')[,-3])
-for(i in 1:nrow(sub_type)){
-  sub_type[i,2] <- switch(sub_type[i,2], 
-                      'Astrocyte' = 'astro',
-                      'Oligodendrocyte' = 'oligo',
-                      'OPC' = 'opc',
-                      'Microglia' = 'microglia',
-                      NA)
-}
-sub_type <- na.omit(sub_type)
- 
- 
-for (i in unique(sub_type$subclass_label)) {
-  command <- paste0(i, "<-subset(sub_type, subclass_label=='", i, "')")
-  eval(parse(text=command))
-  command2 <- paste0(i, "_data<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-  eval(parse(text=command2))
-  command3 <- paste0(i, "_data_rm<- prune(",i,"_data,1)")
-  eval(parse(text=command3))
-} 
-
-cell_type_list <- c(unique(broad_type$class_label),unique(sub_type$subclass_label))
 
 # Missing feature pruned data pulling from synapse
-excit_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979729')$path))[,c(-1,-2)]
-inhib_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979730')$path))[,c(-1,-2)]
-unlab_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979731')$path))[,c(-1,-2)]
-astro_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979732')$path))[,c(-1,-2)]
-oligo_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979733')$path))[,c(-1,-2)]
-opc_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979734')$path))[,c(-1,-2)]
-microglia_data_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25979735')$path))[,c(-1,-2)]
-
-
-# Finding total number of unique features
-tot_features <- c(names(excit_data_rm), names(inhib_data_rm), names(unlab_data_rm), names(astro_data_rm),
-    names(oligo_data_rm), names(opc_data_rm), names(microglia_data_rm))
-tot_unique_features <- length(unique(tot_features))
+# excit_data_rm <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25979729')$path))[, c(-1,-2)]
+# inhib_data_rm <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25979730')$path))[, c(-1,-2)]
+# unlab_data_rm <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25979731')$path))[, c(-1,-2)]
+# astro_data_rm <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25979732')$path))[, c(-1,-2)]
+# oligo_data_rm <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25979733')$path))[, c(-1,-2)]
+# opc_data_rm <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25979734')$path))[, c(-1,-2)]
+# microglia_data_rm <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25979735')$path))[, c(-1,-2)]
 
 
 # Automatically subset by region and missing features removed
-region <- group_by(meta[,c(1,21)], by = 'region_label')[,-3]
-for (i in unique(region$region_label)) {
- command <- paste0(i, "<-subset(region, region_label=='", i, "')")
- eval(parse(text=command))
- command2 <- paste0(i, "_data<-semi_join(cpm_exp,", i,",by = 'sample_name')")
- eval(parse(text=command2))
- command3 <- paste0(i, "_data_rm<- prune(",i,"_data,1)")
- eval(parse(text=command3))
-}
+mtg <- filter_dat(exp = gene_exp, met = meta, region = 'MTG')
+v1c <- filter_dat(exp = gene_exp, met = meta, region = 'V1C')
+cgg <- filter_dat(exp = gene_exp, met = meta, region = 'CgG')
+m1lm <- filter_dat(exp = gene_exp, met = meta, region = 'M1lm')
+s1ul <- filter_dat(exp = gene_exp, met = meta, region = 'S1ul')
+s1lm <- filter_dat(exp = gene_exp, met = meta, region = 'S1lm')
+m1ul <- filter_dat(exp = gene_exp, met = meta, region = 'M1ul')
+a1c <- filter_dat(exp = gene_exp, met = meta, region = 'A1C')
 
 
 # Pulling missing feature pruned data for region from synapse
-mtg_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986011')$path))[,-1]
-v1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986012')$path))[,c(-1,-2)]
-cgg_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986013')$path))[,c(-1,-2)]
-m1lm_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986014')$path))[,c(-1,-2)]
-s1ul_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986015')$path))[,c(-1,-2)]
-s1lm_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986016')$path))[,c(-1,-2)]
-m1ul_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986017')$path))[,c(-1,-2)]
-a1c_rm <- as.data.frame(data.table::fread(synapser::synGet('syn25986018')$path))[,c(-1,-2)]
+# mtg_data <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25986011')$path))[, -1]
+# v1c_data <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25986012')$path))[, c(-1,-2)]
+# cgg_data <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25986013')$path))[, c(-1,-2)]
+# m1lm_data <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25986014')$path))[, c(-1,-2)]
+# s1ul_data <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25986015')$path))[, c(-1,-2)]
+# s1lm_data <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25986016')$path))[, c(-1,-2)]
+# m1ul_data <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25986017')$path))[, c(-1,-2)]
+# a1c_data <- as.data.frame(data.table::fread(
+#   synapser::synGet('syn25986018')$path))[, c(-1,-2)]
 
 
-#Unlab per region
-# excit <- subset(meta, class_label == 'Glutamatergic')
-# excit <- excit[,c(1,21)]
-# for(i in 1:nrow(excit)){
-#   excit[i,2] <- switch(excit[i,2],
-#                        'MTG' = 'MTG_unlab',
-#                        'V1C' = 'V1C_unlab',
-#                        'CgG' = 'CgG_unlab',
-#                        'M1lm' = 'M1lm_unlab',
-#                        'S1ul' = 'S1ul_unlab',
-#                        'S1lm' = 'S1lm_unlab',
-#                        'M1ul' = 'M1ul_unlab',
-#                        'A1C' = 'A1C_unlab')
-# }
-# 
-# for (i in unique(excit$region_label)) {
-#   command <- paste0(i, "<-subset(excit, region_label=='", i, "')")
-#   eval(parse(text=command))
-#   command2 <- paste0(i, "<-semi_join(cpm_exp,", i,",by = 'sample_name')")
-#   eval(parse(text=command2))
-#   command3 <- paste0(i, "<- prune(",i,",1)")
-#   eval(parse(text=command3))
-# }
-
-
-# Analyzing different cutoffs to determine cutoff treshold
-bp_names <<- c()
+# Analyzing different cutoffs to determine cutoff threshold
+bp_names <<- c() 
 z_names <<- c()
 cpm_1_names <<- c()
 cpm_0.5_names <<- c()
 cpm_0.1_names <<- c()
 
+cell_type_list <- c('exc','inh','unk','astro','oligo','opc','micro','endo',
+                    'vlmc','peri')
+
+test <- function(x,z) {
+  count <- as.data.frame(t(as.data.frame(apply(x[,-2],1, FUN = median))))
+  pruned <- as.data.frame(count[!(count <= z)],)
+  pruned <- x[,c('sample_name',names(pruned))]
+  return(pruned)
+}
+
+
 out <- data.frame()
-for (i in cell_type_list){
-  command3 <- paste0("out <- rbind(out,cutoff_summ(",i,"_data))")
+for (i in cell_type_list) {
+  command3 <- paste0("out <- rbind(out,cutoff_summ(",i,"$exp))")
   eval(parse(text=command3))
 }
 
@@ -199,6 +191,7 @@ unique_features <- cbind(as.numeric(table(table(bp_names))[1]),
 
 cutoff_analysis <- cbind(as.data.frame(cell_type_list),out)
 cutoff_analysis <- rbind(cutoff_analysis,c('unique_features',unique_features))
+
 
 # Quantile cutoff summary 
 quant_0.1_names <<- c()
@@ -218,14 +211,14 @@ unique_features <- cbind(as.numeric(table(table(quant_1_names))[1]),
 quant_analysis <- cbind(as.data.frame(cell_type_list),quant_out)
 quant_analysis <- rbind(quant_analysis,c('unique_features',unique_features))
 
-
 # From quant_summ analysis 0.5 has been determined to be good cutoff
 # Running quantile pruning and finding number of features with median = 0
 zero_list <<- c()
 for (i in cell_type_list) {
   command3 <- paste0(i,"_quant<- quant(",i,"_data,0.5)")
   eval(parse(text=command3))
-  command5 <- paste0("zero_list<-append(zero_list, sum(apply(",i,"_quant[,c(-1,-2)],2,FUN=median) == 0))")
+  command5 <- paste0("zero_list<-append(zero_list, 
+                     sum(apply(",i,"_quant[,c(-1,-2)],2,FUN=median) == 0))")
   eval(parse(text=command5))
 }
 
@@ -237,114 +230,42 @@ zero_quant <- cbind(as.data.frame(cell_type_list),as.data.frame(zero_list))
 zero_quant <- cbind(zero_quant,quant_analysis$quant_0.5[-8],
                     cutoff_analysis$cpm_0.5[-8])
 colnames(zero_quant) <- c('Cell_Type','Median_0','quant_0.5','cpm_0.5')
-zero_quant <- zero_quant[,c(1,3,2,4)]
+zero_quant <- zero_quant[, c(1,3,2,4)]
 
-
-# Fine grain analysis
-exc_l3_cgg <- as.data.frame(subset(meta, cluster_label == 'Exc L3 LINC00507 PSRC1'
-                                   & region_label == 'CgG')[,1])
-colnames(exc_l3_cgg) <- 'sample_name'
-exc_l3_cgg_data <- semi_join(cpm_exp, exc_l3_cgg, by = 'sample_name')
-exc_l3_cgg_data_rm <- prune(exc_l3_cgg_data,0.5)
-exc_l3_cgg_quant <- quant(exc_l3_cgg_data,0.5)
-exc_l3_cgg_med_z <-sum(apply(exc_l3_cgg_quant[,c(-1,-2)],2,FUN=median) == 0)
-exc_l3_cgg_subs <- c('Exc L3 CgG',ncol(exc_l3_cgg_quant),exc_l3_cgg_med_z,ncol(exc_l3_cgg_data_rm))
-
-
-astro_l1_cgg <- as.data.frame(subset(meta, cluster_label == 'Astro L1-6 FGFR3 ETNPPL' 
-                                     & region_label == 'CgG')[,1])
-colnames(astro_l1_cgg) <- 'sample_name'
-astro_l1_cgg_data <- semi_join(cpm_exp, astro_l1_cgg, by = 'sample_name')
-astro_l1_cgg_data_rm <- prune(astro_l1_cgg_data, 0.5)
-astro_l1_cgg_quant <- quant(astro_l1_cgg_data,0.5)
-astro_l1_cgg_med_z <- sum(apply(astro_l1_cgg_quant[,c(-1,-2)],2,FUN=median) == 0)
-astro_l1_cgg_subs <- c('Astro L1 CgG',ncol(astro_l1_cgg_quant),astro_l1_cgg_med_z,ncol(astro_l1_cgg_data_rm))
-
-
-astro_l1_mtg <- as.data.frame(subset(meta, cluster_label == 'Astro L1-6 FGFR3 ETNPPL' 
-                                     & region_label == 'MTG')[,1])
-colnames(astro_l1_mtg) <- 'sample_name'
-astro_l1_mtg_data <- semi_join(cpm_exp, astro_l1_mtg, by = 'sample_name')
-astro_l1_mtg_data_rm <- prune(astro_l1_mtg_data,0.5)
-astro_l1_mtg_quant <- quant(astro_l1_mtg_data,0.5)
-astro_l1_mtg_med_z <- sum(apply(astro_l1_mtg_quant[,c(-1,-2)],2,FUN=median) == 0)
-astro_l1_mtg_subs <- c('Astro L1 MTG',ncol(astro_l1_mtg_quant),astro_l1_mtg_med_z,ncol(astro_l1_mtg_data_rm))
-
-
-exc_l2_mtg <- as.data.frame(subset(meta, cluster_label == 'Exc L2-3 LINC00507 RPL9P17'
-                                   & region_label == 'MTG')[,1])
-colnames(exc_l2_mtg) <- 'sample_name'
-exc_l2_mtg_data <- semi_join(cpm_exp, exc_l2_mtg, by = 'sample_name')
-exc_l2_mtg_data_rm <- prune(exc_l2_mtg_data,0.5)
-exc_l2_mtg_quant <- quant(exc_l2_mtg_data,0.5)
-exc_l2_mtg_med_z <- sum(apply(exc_l2_mtg_quant[,c(-1,-2)],2,FUN=median) == 0)
-exc_l2_mtg_subs <- c('Exc L2 MTG',ncol(exc_l2_mtg_quant),exc_l2_mtg_med_z,ncol(exc_l2_mtg_data_rm))
-
-exc_overlap_feature <- c(names(exc_l2_mtg_quant[,c(-1,-2)]), names(exc_l3_cgg_quant[,c(-1,-2)]))
-exc_overlap_feature <- table(table(exc_overlap_feature))[2]
-
-astro_overlap_feature <- c(names(astro_l1_cgg_quant[,c(-1,-2)]), names(astro_l1_mtg_quant[c(-1,-2)]))
-astro_overlap_feature <- table(table(astro_overlap_feature))[2]
-
-fine_grain_analysis <- rbind(as.data.frame(t(exc_l3_cgg_subs)), as.data.frame(t(astro_l1_cgg_subs)),
-                             as.data.frame(t(astro_l1_mtg_subs)), as.data.frame(t(exc_l2_mtg_subs)))
-colnames(fine_grain_analysis) <- c('Type','quant_0.5','median_0','cpm_0.5')
-
-fine_grain_list <- c('exc_l3_cgg_data','astro_l1_cgg_data','astro_l1_mtg_data','exc_l2_mtg_data')
-
-# Fine grain quantile summary
-quant_0.1_names <<- c()
-quant_0.5_names <<- c()
-quant_1_names <<- c()
-fine_grain_quant_out <- data.frame()
-for (i in fine_grain_list) {
-  command3 <- paste0("fine_grain_quant_out <- rbind(fine_grain_quant_out,quant_summ(",i,"))")
-  eval(parse(text=command3))
-}
-
-unique_features <- cbind(as.numeric(table(table(quant_1_names))[1]),
-                         as.numeric(table(table(quant_0.5_names))[1]),
-                         as.numeric(table(table(quant_1_names))[1]))
-
-fine_grain_quant_summ <- cbind(as.data.frame(fine_grain_list),fine_grain_quant_out)
-fine_grain_quant_summ <- rbind(fine_grain_analysis,c('unique_features',unique_features))
 
 
 # Nonzero Histograms
 for (i in cell_type_list) {
-  command4 <- paste0(i,"_hist<-as.data.frame(",i,"_data[,colSums(",i,"_data[,-2]) != 0])")
+  command4 <- paste0(i,"_hist<-as.data.frame(",i,"_data[,colSums(",i,
+                     "_data[, -2]) != 0])")
   eval(parse(text=command4))
 }
 
-nonzero_hist <- function(x){
-  nonzero <- log2(length(x[x != 0])/length(x))
-}
-
-excit_subs <- apply(excit_hist[,2:ncol(excit_hist)], 2, function(x) nonzero_hist(x))
+excit_subs <- apply(excit_hist[, -1], 2, function(x) nonzero_hist(x))
 hist(excit_subs, 
      main = 'Excit Nonzero Histogram', xlab = 'log2 percent nonzero')
 
-inhib_subs <- apply(inhib_hist[,2:ncol(inhib_hist)], 2, function(x) nonzero_hist(x))
+inhib_subs <- apply(inhib_hist[, -1], 2, function(x) nonzero_hist(x))
 hist(inhib_subs, 
      main = 'Inhib Nonzero Histogram', xlab = 'log2 percent nonzero')
 
-unlab_subs <- apply(unlab_hist[,2:ncol(unlab_hist)], 2, function(x) nonzero_hist(x))
+unlab_subs <- apply(unlab_hist[, -1], 2, function(x) nonzero_hist(x))
 hist(unlab_subs, 
      main = 'Unlabelled Nonzero Histogram', xlab = 'log2 percent nonzero')
 
-astro_subs <- apply(astro_hist[,3:ncol(astro_hist)], 2, function(x) nonzero_hist(x))
+astro_subs <- apply(astro_hist[, c(-1,-2)], 2, function(x) nonzero_hist(x))
 hist(astro_subs, 
-     main = 'Astrocytes Nonzero Histogram', xlab = 'log2 percent nonzero', breaks = 35)
+     main = 'Astrocytes Nonzero Histogram', xlab = 'log2 percent nonzero')
 
-oligo_subs <- apply(oligo_hist[,3:ncol(oligo_hist)], 2, function(x) nonzero_hist(x))
+oligo_subs <- apply(oligo_hist[, c(-1,-2)], 2, function(x) nonzero_hist(x))
 hist(oligo_subs, 
-     main = 'Oligodendrocyte Nonzero Histogram', xlab = 'log2 percent nonzero', breaks = 35)
+     main = 'Oligodendrocyte Nonzero Histogram', xlab = 'log2 percent nonzero')
 
-opc_subs <- apply(opc_hist[,3:ncol(opc_hist)], 2, function(x) nonzero_hist(x))
+opc_subs <- apply(opc_hist[, c(-1,-2)], 2, function(x) nonzero_hist(x))
 hist(opc_subs, 
-     main = 'OPC Nonzero Histogram', xlab = 'log2 percent nonzero', breaks = 30)
+     main = 'OPC Nonzero Histogram', xlab = 'log2 percent nonzero')
 
-microglia_subs <- apply(microglia_hist[,3:ncol(microglia_hist)], 2, function(x) nonzero_hist(x))
+microglia_subs <- apply(microglia_hist[, c(-1,-2)], 2, function(x) nonzero_hist(x))
 hist(microglia_subs, 
      main = 'Microglia Nonzero Histogram', xlab = 'log2 percent nonzero')
 
@@ -358,191 +279,159 @@ oligo_summary <- stats(oligo_data_rm)
 opc_summary <- stats(opc_data_rm)
 microglia_summary <- stats(microglia_data_rm)
 
-# mtg_summary <- stats(mtg_rm)
-# v1c_summary <- stats(v1c_rm)
-# cgg_summary <- stats(cgg_rm)
-# m1lm_summary <- stats(m1lm_rm)
-# s1ul_summary <- stats(s1ul_rm)
-# s1lm_summary <- stats(s1lm_rm)
-# m1ul_summary <- stats(m1ul_rm)
-# a1c_summary <- stats(a1c_rm)
-
-mtg_summary <- stats(MTG)
-v1c_summary <- stats(V1C)
-cgg_summary <- stats(CgG)
-m1lm_summary <- stats(M1lm)
-s1ul_summary <- stats(S1ul)
-s1lm_summary <- stats(S1lm)
-m1ul_summary <- stats(M1ul)
-a1c_summary <- stats(A1C)
-
-# Unlab by Region Summary
-# mtg_unlab_summary <- stats(MTG_unlab)
-# v1c_unlab_summary <- stats(V1C_unlab)
-# cgg_unlab_summary <- stats(CgG_unlab)
-# m1lm_unlab_summary <- stats(M1lm_unlab)
-# s1ul_unlab_summary <- stats(S1ul_unlab)
-# s1lm_unlab_summary <- stats(S1lm_unlab)
-# m1ul_unlab_summary <- stats(M1ul_unlab)
-# a1c_unlab_summary <- stats(A1C_unlab)
+mtg_summary <- stats(mtg_data)
+v1c_summary <- stats(v1c_data)
+cgg_summary <- stats(cgg_data)
+m1lm_summary <- stats(m1lm_data)
+s1ul_summary <- stats(s1ul_data)
+s1lm_summary <- stats(s1lm_data)
+m1ul_summary <- stats(m1ul_data)
+a1c_summary <- stats(a1c_data)
 
 
 # Histograms of Mean - Median to decide central tendency to use
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Excit_hist.jpeg')
-hist(excit_summary$diff, main = 'Excitatory Cells Mean - Median', xlab = 'mean - median')
+hist(excit_summary$diff, main = 'Excitatory Cells Mean - Median', 
+     xlab = 'mean - median')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Unlab_hist.jpeg')
-hist(unlab_summary$diff, main = 'Unlabelled Cells Mean - Median', xlab = 'mean - median')
+hist(unlab_summary$diff, main = 'Unlabelled Cells Mean - Median', 
+     xlab = 'mean - median')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Inhib_hist.jpeg')
-hist(inhib_summary$diff, main = 'Inhibitory Cells Mean - Median', xlab = 'mean - median')
+hist(inhib_summary$diff, main = 'Inhibitory Cells Mean - Median', 
+     xlab = 'mean - median')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Astro_hist.jpeg')
-hist(astro_summary$diff, main = 'Astrocytes Mean - Median', xlab = 'mean - median')
+hist(astro_summary$diff, main = 'Astrocytes Mean - Median', 
+     xlab = 'mean - median')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Oligo_hist.jpeg')
-hist(oligo_summary$diff, main = 'Oligodendrocytes Mean - Median', xlab = 'mean - median')
+hist(oligo_summary$diff, main = 'Oligodendrocytes Mean - Median', 
+     xlab = 'mean - median')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/OPC_hist.jpeg')
-hist(opc_summary$diff, main = 'Oligo Precrusor Cells Mean - Median', xlab = 'mean - median')
+hist(opc_summary$diff, main = 'Oligo Precrusor Cells Mean - Median', 
+     xlab = 'mean - median')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Microglia_hist.jpeg')
-hist(microglia_summary$diff, main = 'Microglia Mean - Median', xlab = 'mean - median')
+hist(microglia_summary$diff, main = 'Microglia Mean - Median', 
+     xlab = 'mean - median')
 dev.off()
 
 
+# Cell Type Specificity Scoring ------------------------------------------------
+
 # Dataframe with medians of all features by Broad Cell type
 features <- as.data.frame(names(cpm_exp))
-features <- as.data.frame(features[-1,])
+features <- as.data.frame(features[-1, ])
 colnames(features)[1] <- 'features'
 
 # Median of features by Broad Cell Type
-inhib_med <- left_join(features, inhib_summary[,c(1,4)], by = 'features')
-unlab_med <- left_join(features, unlab_summary[,c(1,4)], by = 'features')
-excit_med <- left_join(features, excit_summary[,c(1,4)], by = 'features')
-astro_med <- left_join(features, astro_summary[,c(1,4)], by = 'features')
-oligo_med <- left_join(features, oligo_summary[,c(1,4)], by = 'features')
-opc_med <- left_join(features, opc_summary[,c(1,4)], by = 'features')
-microglia_med <- left_join(features, microglia_summary[,c(1,4)], by = 'features')
+inhib_med <- left_join(features, inhib_summary[, c(1,4)], by = 'features')
+unlab_med <- left_join(features, unlab_summary[, c(1,4)], by = 'features')
+excit_med <- left_join(features, excit_summary[, c(1,4)], by = 'features')
+astro_med <- left_join(features, astro_summary[, c(1,4)], by = 'features')
+oligo_med <- left_join(features, oligo_summary[, c(1,4)], by = 'features')
+opc_med <- left_join(features, opc_summary[, c(1,4)], by = 'features')
+microglia_med <- left_join(features, microglia_summary[, c(1,4)], by = 'features')
 
-features_med <- cbind(inhib_med[,2], unlab_med[,2], excit_med[,2],
-                      astro_med[,2], oligo_med[,2], opc_med[,2],
-                      microglia_med[,2])
+features_med <- cbind(inhib_med[, 2], unlab_med[, 2], excit_med[, 2],
+                      astro_med[, 2], oligo_med[, 2], opc_med[, 2],
+                      microglia_med[, 2])
 features_med <- cbind(features, features_med)
 features_med[is.na(features_med)] <- 0
 colnames(features_med) <- c('features', 'Inhibitory','Unlabelled','Excitatory',
                             'Astrocytes', 'Oligodendrocytes', 'OPC', 'Microglia')
-features_med[,-1] <- 2^features_med[,-1] # Undo log transform so x > 0
+features_med[, -1] <- 2^features_med[, -1] # Undo log transform so x > 0
 features_med[features_med == 1] <- 0
-features_med$sum <- apply(features_med[,-1], 1, FUN = sum)
-features_med <- features_med[-1,]
+features_med$sum <- apply(features_med[, -1], 1, FUN = sum)
+features_med <- features_med[-1, ]
 
 # Proportion Composition by Median as Cell Type Score
-composition <- features_med[,c(-1,-9)]/features_med[,9]
+composition <- features_med[, c(-1,-9)]/features_med[, 9]
 composition[is.na(composition)] <- 0
-composition <- cbind(features_med[,1], composition)
+composition <- cbind(features_med[, 1], composition)
 colnames(composition)[1] <- 'features'
 
 
 # Histograms of composition values by cell type
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Inhib_comp.jpeg')
-hist(composition$Inhib[composition$Inhib != 0], main = 'Inhibitory Cells Composition values', 
+hist(composition$Inhib[composition$Inhib != 0], 
+     main = 'Inhibitory Cells Composition values', 
      xlab = 'Composition values')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Unlab_comp.jpeg')
-hist(composition$Unlabelled[composition$Unlabelled != 0], main = 'Unlabelled Cells Composition values', 
+hist(composition$Unlabelled[composition$Unlabelled != 0], 
+     main = 'Unlabelled Cells Composition values', 
      xlab = 'Composition values')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Excit_comp.jpeg')
-hist(composition$Excitatory[composition$Excitatory != 0], main = 'Excitatory Cells Composition values', 
+hist(composition$Excitatory[composition$Excitatory != 0], 
+     main = 'Excitatory Cells Composition values', 
      xlab = 'Composition values')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Astro_comp.jpeg')
-hist(composition$Astrocytes[composition$Astrocytes != 0], main = 'Astrocytes Composition values', 
+hist(composition$Astrocytes[composition$Astrocytes != 0], 
+     main = 'Astrocytes Composition values', 
      xlab = 'Composition values')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Oligo_comp.jpeg')
-hist(composition$Oligodendrocytes[composition$Oligodendrocytes != 0], main = 'Oligodendrocytes Composition values', 
+hist(composition$Oligodendrocytes[composition$Oligodendrocytes != 0], 
+     main = 'Oligodendrocytes Composition values', 
      xlab = 'Composition values')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/OPC_comp.jpeg')
-hist(composition$OPC[composition$OPC != 0], main = 'Oligo Precursor Cells Composition values', 
+hist(composition$OPC[composition$OPC != 0], 
+     main = 'Oligo Precursor Cells Composition values', 
      xlab = 'Composition values')
 dev.off()
 
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/Microglia_comp.jpeg')
-hist(composition$Microglia[composition$Microglia != 0], main = 'Microglia Composition values', 
+hist(composition$Microglia[composition$Microglia != 0], 
+     main = 'Microglia Composition values', 
      xlab = 'Composition values')
 dev.off()
 
 
 # Brain region medians
-mtg_med <- left_join(features, mtg_summary[,c(1,4)], by = 'features')
-v1c_med <- left_join(features, v1c_summary[,c(1,4)], by = 'features')
-cgg_med <- left_join(features, cgg_summary[,c(1,4)], by = 'features')
-m1lm_med <- left_join(features, m1lm_summary[,c(1,4)], by = 'features')
-s1ul_med <- left_join(features, s1ul_summary[,c(1,4)], by = 'features')
-s1lm_med <- left_join(features, s1lm_summary[,c(1,4)], by = 'features')
-m1ul_med <- left_join(features, m1ul_summary[,c(1,4)], by = 'features')
-a1c_med <- left_join(features, a1c_summary[,c(1,4)], by = 'features')
+mtg_med <- left_join(features, mtg_summary[, c(1,4)], by = 'features')
+v1c_med <- left_join(features, v1c_summary[, c(1,4)], by = 'features')
+cgg_med <- left_join(features, cgg_summary[, c(1,4)], by = 'features')
+m1lm_med <- left_join(features, m1lm_summary[, c(1,4)], by = 'features')
+s1ul_med <- left_join(features, s1ul_summary[, c(1,4)], by = 'features')
+s1lm_med <- left_join(features, s1lm_summary[, c(1,4)], by = 'features')
+m1ul_med <- left_join(features, m1ul_summary[, c(1,4)], by = 'features')
+a1c_med <- left_join(features, a1c_summary[, c(1,4)], by = 'features')
 
-features_med_region <- cbind(mtg_med[,2], v1c_med[,2], cgg_med[,2],
-                      m1lm_med[,2], s1ul_med[,2], s1lm_med[,2],
-                      m1ul_med[,2], a1c_med[,2])
+features_med_region <- cbind(mtg_med[, 2], v1c_med[, 2], cgg_med[, 2],
+                      m1lm_med[, 2], s1ul_med[, 2], s1lm_med[, 2],
+                      m1ul_med[, 2], a1c_med[, 2])
 features_med_region <- cbind(features, features_med_region)
 features_med_region[is.na(features_med_region)] <- 0
 colnames(features_med_region) <- c('features', 'MTG','V1C','CgG',
                             'M1lm', 'S1ul', 'S1lm', 'M1ul', 'A1C')
-features_med_region[,-1] <- 2^features_med_region[,-1] # Undo log transform so x > 0
+features_med_region[, -1] <- 2^features_med_region[, -1] #Undo log transform so x>0
 features_med_region[features_med_region == 1] <- 0
-features_med_region$sum <- apply(features_med_region[,-1], 1, FUN = sum)
-features_med_region <- features_med_region[-1,]
+features_med_region$sum <- apply(features_med_region[, -1], 1, FUN = sum)
+features_med_region <- features_med_region[-1, ]
 
 # Proportion Composition by Median as Cell Type Score
-composition_region <- features_med_region[,c(-1,-10)]/features_med_region[,10]
+composition_region <- features_med_region[, c(-1,-10)]/features_med_region[, 10]
 composition_region[is.na(composition_region)] <- 0
-composition_region <- cbind(features_med_region[,1], composition_region)
+composition_region <- cbind(features_med_region[, 1], composition_region)
 colnames(composition_region)[1] <- 'features'
-
-
-#Brain region medians for Unlabelled subset
-# mtg_med <- left_join(features, mtg_unlab_summary[,c(1,4)], by = 'features')
-# v1c_med <- left_join(features, v1c_unlab_summary[,c(1,4)], by = 'features')
-# cgg_med <- left_join(features, cgg_unlab_summary[,c(1,4)], by = 'features')
-# m1lm_med <- left_join(features, m1lm_unlab_summary[,c(1,4)], by = 'features')
-# s1ul_med <- left_join(features, s1ul_unlab_summary[,c(1,4)], by = 'features')
-# s1lm_med <- left_join(features, s1lm_unlab_summary[,c(1,4)], by = 'features')
-# m1ul_med <- left_join(features, m1ul_unlab_summary[,c(1,4)], by = 'features')
-# a1c_med <- left_join(features, a1c_unlab_summary[,c(1,4)], by = 'features')
-# 
-# features_med_region <- cbind(mtg_med[,2], v1c_med[,2], cgg_med[,2],
-#                              m1lm_med[,2], s1ul_med[,2], s1lm_med[,2],
-#                              m1ul_med[,2], a1c_med[,2])
-# features_med_region <- cbind(features, features_med_region)
-# features_med_region[is.na(features_med_region)] <- 0
-# colnames(features_med_region) <- c('features', 'MTG','V1C','CgG',
-#                                    'M1lm', 'S1ul', 'S1lm', 'M1ul', 'A1C')
-# features_med_region[,-1] <- 2^features_med_region[,-1] # Undo log transform so x > 0
-# features_med_region[features_med_region == 1] <- 0
-# features_med_region$sum <- apply(features_med_region[,-1], 1, FUN = sum)
-# features_med_region <- features_med_region[-1,]
-# 
-# # Proportion Composition by Median as Cell Type Score
-# composition_region <- features_med_region[,c(-1,-10)]/features_med_region[,10]
-# composition_region[is.na(composition_region)] <- 0
-# composition_region <- cbind(features_med_region[,1], composition_region)
-# colnames(composition_region)[1] <- 'features'
 
 
 # UpSet Plots
@@ -554,20 +443,21 @@ ups_region[ups_region != 0] <- 1
 
 # Upset plot broad cell type saved as jpeg
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/UpSet_Broad_Cell_Types.jpeg')
-upset(ups, sets = names(ups)[c(-1,-9)], order.by = 'freq',
-      mainbar.y.label = 'Broad Cell Type Intersection', sets.x.label = 'Broad Cell Type') 
+upset(ups, sets = names(ups)[c(-1,-9)], 
+      order.by = 'freq',
+      mainbar.y.label = 'Broad Cell Type Intersection', 
+      sets.x.label = 'Broad Cell Type') 
 dev.off()
 
 #UpSet Plot by region saved as jpeg
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/UpSet_Brain_Region.jpeg')
-upset(as.data.frame(ups_region), sets = names(ups_region)[c(-1,-10)], order.by = 'freq')
+upset(as.data.frame(ups_region), 
+      sets = names(ups_region)[c(-1,-10)], 
+      order.by = 'freq')
 dev.off()
 
 
-
-# Pushing data to synapse -----------------------------------------------------------
-
-#synLogin(authToken = "")
+# Pushing data to synapse ------------------------------------------------------
 
 # Setting Synapse ID's
 parentID = 'syn25881694'
