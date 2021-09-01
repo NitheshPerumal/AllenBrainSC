@@ -13,9 +13,9 @@ CPM <- function(x) {
 #' @param z numeric value for threshold of CPM cutoff
 #' @return pruned dataframe of gene expression matrix with missing features removed
 prune <- function(x,z) {
-  count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, FUN = median))))
-  pruned <- as.data.frame(count[,!(count <= z)])
-  pruned <- x[,c('sample_name',names(pruned))]
+  count <- as.data.frame(t(apply(x,1, FUN = median)))
+  pruned <- as.data.frame(count[,(count >= z)])
+  pruned <- x[names(pruned),]
   return(pruned)
 }
 
@@ -26,28 +26,35 @@ prune <- function(x,z) {
 #' @return list of total features, and list of features with zeros pruned
 #' @return 3 lists of gene features kept with respective cutoffs 
 cutoff_summ <- function(x) {
-  y <- x[,-2]
   
-  bp <- ncol(y)
-  bp_names <<- c(bp_names,names(y))
+  bp <- nrow(x)
+  bp_names <<- c(bp_names,rownames(x))
   
-  z <- as.data.frame(y[,colSums(y) != 0])
-  z_names <<- c(z_names,names(z))
-  z <- ncol(z)
+  z <- as.data.frame(x[rowSums(x) != 0,])
+  z_names <<- c(z_names,rownames(z))
+  z <- nrow(z)
   
   cpm_1 <- prune(x,1)
-  cpm_1_names <<- c(cpm_1_names, names(cpm_1))
-  cpm_1 <- ncol(cpm_1)
+  cpm_1_names <<- c(cpm_1_names, rownames(cpm_1))
+  cpm_1 <- nrow(cpm_1)
   
   cpm_0.5 <- prune(x,0.5)
-  cpm_0.5_names <<- c(cpm_0.5_names, names(cpm_0.5))
-  cpm_0.5 <- ncol(cpm_0.5)
+  cpm_0.5_names <<- c(cpm_0.5_names, rownames(cpm_0.5))
+  cpm_0.5 <- nrow(cpm_0.5)
   
   cpm_0.1 <- prune(x,0.1)
-  cpm_0.1_names <<- c(cpm_0.1_names, names(cpm_0.1))
-  cpm_0.1 <- ncol(cpm_0.1)
+  cpm_0.1_names <<- c(cpm_0.1_names, rownames(cpm_0.1))
+  cpm_0.1 <- nrow(cpm_0.1)
   
-  return(as.data.frame(cbind(bp,z,cpm_1,cpm_0.5,cpm_0.1)))
+  cpm_5 <- prune(x,5)
+  cpm_5_names <<- c(cpm_5_names, rownames(cpm_5))
+  cpm_5 <- nrow(cpm_5)
+  
+  cpm_10 <- prune(x,10)
+  cpm_10_names <<- c(cpm_10_names, rownames(cpm_10))
+  cpm_10 <- nrow(cpm_10)
+  
+  return(as.data.frame(cbind(bp,z,cpm_1,cpm_0.5,cpm_0.1,cpm_5,cpm_10)))
 }
 
 
@@ -57,10 +64,11 @@ cutoff_summ <- function(x) {
 #' @param z numeric value for threshold of CPM cutoff
 #' @return pruned dataframe of gene expression matrix with missing features removed
 quant <- function(x,z) {
-  count <- as.data.frame(t(as.data.frame(apply(x[,-2],2, 
-                                               function(x) unname(quantile(x, c(.8)))))))
+  count <- as.data.frame(t(as.data.frame(apply(x,1, 
+                                               function(x) unname(quantile(x, c(.8))) 
+                                               ))))
   pruned <- as.data.frame(count[,count >= z])
-  out <- as.data.frame(x[,c('sample_name',names(pruned))])
+  out <- as.data.frame(x[names(pruned),])
   return(out)
 }
 
@@ -72,28 +80,26 @@ quant <- function(x,z) {
 quant_summ <- function(x) {
   
   quant_0.1 <- quant(x,0.1)
-  quant_0.1_names <<- c(quant_0.1_names, names(quant_0.1))
-  quant_0.1 <- ncol(quant_0.1)
+  quant_0.1_names <<- c(quant_0.1_names, rownames(quant_0.1))
+  quant_0.1 <- nrow(quant_0.1)
   
   quant_0.5 <- quant(x,0.5)
-  quant_0.5_names <<- c(quant_0.5_names, names(quant_0.5))
-  quant_0.5 <- ncol(quant_0.5)
+  quant_0.5_names <<- c(quant_0.5_names, rownames(quant_0.5))
+  quant_0.5 <- nrow(quant_0.5)
   
   quant_1 <- quant(x,1)
-  quant_1_names <<- c(quant_1_names, names(quant_1))
-  quant_1 <- ncol(quant_1)
+  quant_1_names <<- c(quant_1_names, rownames(quant_1))
+  quant_1 <- nrow(quant_1)
   
+  quant_5 <- quant(x,5)
+  quant_5_names <<- c(quant_5_names, rownames(quant_5))
+  quant_5 <- nrow(quant_5)
   
-  
-  return(as.data.frame(cbind(quant_1,quant_0.5,quant_0.1)))
-}
+  quant_10 <- quant(x,10)
+  quant_10_names <<- c(quant_10_names, rownames(quant_10))
+  quant_10 <- nrow(quant_10)
 
-
-#' Function to create data for visualization of nonzero histograms
-#' @param x dataframe with zero columns removed
-#' @return log2 transformation of fraction of nonzero/total samples
-nonzero_hist <- function(x) {
-  nonzero <- log2(length(x[x != 0])/length(x))
+  return(as.data.frame(cbind(quant_1,quant_0.5,quant_0.1,quant_5,quant_10) ))
 }
 
 
@@ -101,25 +107,28 @@ nonzero_hist <- function(x) {
 #' @param x dataframe of gene matrix to generate summary statistics for
 #' @return out dataframe of summary statistics
 stats <- function(x) {
-  y <- x[,-1]
   
-  wm <- as.data.frame(apply(y, 2, function(x) log2(mean(winsor(x, trim = 0.05, na.rm = TRUE)))))
+  wm <- as.data.frame(apply(x, 1, function(x) log2(mean(winsor(x, trim = 0.05, na.rm = TRUE)))))
   colnames(wm)[1] <- 'wins_mean'
   
-  m <- as.data.frame(apply(y, 2, function(x) log2(as.numeric(mean(x)))))
+  m <- as.data.frame(apply(x, 1, function(x) log2(as.numeric(mean(x)))))
   colnames(m)[1] <- 'mean'
   
-  med <- as.data.frame(apply(y, 2, function(x) log2(as.numeric(median(x)))))
+  med <- as.data.frame(apply(x, 1, function(x) log2(as.numeric(median(x)))))
   colnames(med)[1] <- 'median'
   
-  std_dev <- as.data.frame(apply(y, 2, FUN = sd))
+  std_dev <- as.data.frame(apply(x, 1, FUN = sd))
   colnames(std_dev)[1] <- 'std_dev'
-  
+
   feature_name <- as.data.frame(rownames(m))
   colnames(feature_name)[1] <- 'features'
   
   out <- cbind(feature_name, wm, m, med, m-med, std_dev)
   colnames(out)[5] <- 'diff'
+  
+  hist(out$diff, main = paste0(deparse(substitute(x)),"Mean - Median"), 
+       xlab = 'mean - median')
+  
   return(out)
 }
 
@@ -293,6 +302,50 @@ filter_dat <- function(exp, met, pcnt = .5, value = 1,
                met = met, 
                features = features, 
                count_coverage = count_coverage) )
+  
+}
+
+
+#' Cell Type Specificity Scoring
+#' Scores genes based on the specificty to cell types
+#' 
+#' @usage 
+#' 
+#' @param cell_list list of object names used for cell type scoring
+#' @return a list object of composition table (list$comp) and input data for
+#' UpSet plots
+
+composition <- function(cell_list, mainbar_name, sets_name) {
+  
+  # Dataframe with medians of all features by Broad Cell type
+  features <- as.data.frame(rownames(gene_exp))
+  colnames(features)[1] <- 'features'
+  
+
+  for (i in cell_list) {
+    command3 <- paste0("features <- left_join(features,",i,"[, c(1,4)], by = 'features')")
+    eval(parse(text=command3))
+    #features <- left_join(features, i[, c(1,4)], by = 'features')[,2]
+  }
+  colnames(features) <- c("features",cell_list)
+  
+  # Zeroing NA and making column with sum for each gene
+  features[is.na(features)] <- 0
+  features$sum <- apply(features[,-1], 1, FUN = sum)
+  
+  
+  # Proportion Composition by Median as Cell Type Score
+  composition <- features[,2:(ncol(features)-1)]/features$sum
+  composition[is.na(composition)] <- 0
+  composition <- cbind(features[, 1], composition)
+  colnames(composition)[1] <- 'features'
+  
+  # UpSet plot data
+  ups <- features
+  ups[ups != 0] <- 1
+  
+  return( list(comp = composition,
+               ups = ups) )
   
 }
 

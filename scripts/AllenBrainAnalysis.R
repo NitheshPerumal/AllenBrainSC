@@ -107,9 +107,6 @@ astro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Astro
 oligo <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Oligo')
 opc <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'OPC')
 micro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Micro')
-endo <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Endo')
-vlmc <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'VLMC')
-peri <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Peri')
 
 
 # Missing feature pruned data pulling from synapse
@@ -165,17 +162,10 @@ z_names <<- c()
 cpm_1_names <<- c()
 cpm_0.5_names <<- c()
 cpm_0.1_names <<- c()
+cpm_5_names <<- c()
+cpm_10_names <<- c()
 
-cell_type_list <- c('exc','inh','unk','astro','oligo','opc','micro','endo',
-                    'vlmc','peri')
-
-test <- function(x,z) {
-  count <- as.data.frame(t(as.data.frame(apply(x[,-2],1, FUN = median))))
-  pruned <- as.data.frame(count[!(count <= z)],)
-  pruned <- x[,c('sample_name',names(pruned))]
-  return(pruned)
-}
-
+cell_type_list <- c('exc','inh','unk','astro','oligo','opc','micro')
 
 out <- data.frame()
 for (i in cell_type_list) {
@@ -187,7 +177,9 @@ unique_features <- cbind(as.numeric(table(table(bp_names))[1]),
                          as.numeric(table(table(z_names))[1]),
                          as.numeric(table(table(cpm_1_names))[1]),
                          as.numeric(table(table(cpm_0.5_names))[1]),
-                         as.numeric(table(table(cpm_0.1_names))[1]))
+                         as.numeric(table(table(cpm_0.1_names))[1]),
+                         as.numeric(table(table(cpm_5_names))[1]),
+                         as.numeric(table(table(cpm_10_names))[1]))
 
 cutoff_analysis <- cbind(as.data.frame(cell_type_list),out)
 cutoff_analysis <- rbind(cutoff_analysis,c('unique_features',unique_features))
@@ -197,262 +189,67 @@ cutoff_analysis <- rbind(cutoff_analysis,c('unique_features',unique_features))
 quant_0.1_names <<- c()
 quant_0.5_names <<- c()
 quant_1_names <<- c()
+quant_5_names <<- c()
+quant_10_names <<- c()
 
 quant_out <- data.frame()
 for (i in cell_type_list) {
-  command3 <- paste0("quant_out <- rbind(quant_out,quant_summ(",i,"_data))")
+  command3 <- paste0("quant_out <- rbind(quant_out,quant_summ(",i,"$exp))")
   eval(parse(text=command3))
 }
 
 unique_features <- cbind(as.numeric(table(table(quant_1_names))[1]),
                          as.numeric(table(table(quant_0.5_names))[1]),
-                         as.numeric(table(table(quant_1_names))[1]))
+                         as.numeric(table(table(quant_1_names))[1]),
+                         as.numeric(table(table(quant_5_names))[1]),
+                         as.numeric(table(table(quant_10_names))[1]))
 
 quant_analysis <- cbind(as.data.frame(cell_type_list),quant_out)
 quant_analysis <- rbind(quant_analysis,c('unique_features',unique_features))
 
-# From quant_summ analysis 0.5 has been determined to be good cutoff
-# Running quantile pruning and finding number of features with median = 0
-zero_list <<- c()
-for (i in cell_type_list) {
-  command3 <- paste0(i,"_quant<- quant(",i,"_data,0.5)")
-  eval(parse(text=command3))
-  command5 <- paste0("zero_list<-append(zero_list, 
-                     sum(apply(",i,"_quant[,c(-1,-2)],2,FUN=median) == 0))")
-  eval(parse(text=command5))
-}
-
-# Zero_quant is the summary dataframe with each cell type
-# the number of features quant pruned with 0.5 cutoff, the
-# number of features with median 0 in quant pruning, and the
-# number of features after median pruning with 0.5 cutoff
-zero_quant <- cbind(as.data.frame(cell_type_list),as.data.frame(zero_list))
-zero_quant <- cbind(zero_quant,quant_analysis$quant_0.5[-8],
-                    cutoff_analysis$cpm_0.5[-8])
-colnames(zero_quant) <- c('Cell_Type','Median_0','quant_0.5','cpm_0.5')
-zero_quant <- zero_quant[, c(1,3,2,4)]
-
-
-
-# Nonzero Histograms
-for (i in cell_type_list) {
-  command4 <- paste0(i,"_hist<-as.data.frame(",i,"_data[,colSums(",i,
-                     "_data[, -2]) != 0])")
-  eval(parse(text=command4))
-}
-
-excit_subs <- apply(excit_hist[, -1], 2, function(x) nonzero_hist(x))
-hist(excit_subs, 
-     main = 'Excit Nonzero Histogram', xlab = 'log2 percent nonzero')
-
-inhib_subs <- apply(inhib_hist[, -1], 2, function(x) nonzero_hist(x))
-hist(inhib_subs, 
-     main = 'Inhib Nonzero Histogram', xlab = 'log2 percent nonzero')
-
-unlab_subs <- apply(unlab_hist[, -1], 2, function(x) nonzero_hist(x))
-hist(unlab_subs, 
-     main = 'Unlabelled Nonzero Histogram', xlab = 'log2 percent nonzero')
-
-astro_subs <- apply(astro_hist[, c(-1,-2)], 2, function(x) nonzero_hist(x))
-hist(astro_subs, 
-     main = 'Astrocytes Nonzero Histogram', xlab = 'log2 percent nonzero')
-
-oligo_subs <- apply(oligo_hist[, c(-1,-2)], 2, function(x) nonzero_hist(x))
-hist(oligo_subs, 
-     main = 'Oligodendrocyte Nonzero Histogram', xlab = 'log2 percent nonzero')
-
-opc_subs <- apply(opc_hist[, c(-1,-2)], 2, function(x) nonzero_hist(x))
-hist(opc_subs, 
-     main = 'OPC Nonzero Histogram', xlab = 'log2 percent nonzero')
-
-microglia_subs <- apply(microglia_hist[, c(-1,-2)], 2, function(x) nonzero_hist(x))
-hist(microglia_subs, 
-     main = 'Microglia Nonzero Histogram', xlab = 'log2 percent nonzero')
-
 
 # Generating summary statistics 
-excit_summary <- stats(excit_data_rm)
-unlab_summary <- stats(unlab_data_rm)
-inhib_summary <- stats(inhib_data_rm)
-astro_summary <- stats(astro_data_rm)
-oligo_summary <- stats(oligo_data_rm)
-opc_summary <- stats(opc_data_rm)
-microglia_summary <- stats(microglia_data_rm)
+exc_summary <- stats(exc$exp)
+unk_summary <- stats(unk$exp)
+inh_summary <- stats(inh$exp)
+astro_summary <- stats(astro$exp)
+oligo_summary <- stats(oligo$exp)
+opc_summary <- stats(opc$exp)
+micro_summary <- stats(micro$exp)
 
-mtg_summary <- stats(mtg_data)
-v1c_summary <- stats(v1c_data)
-cgg_summary <- stats(cgg_data)
-m1lm_summary <- stats(m1lm_data)
-s1ul_summary <- stats(s1ul_data)
-s1lm_summary <- stats(s1lm_data)
-m1ul_summary <- stats(m1ul_data)
-a1c_summary <- stats(a1c_data)
-
-
-# Histograms of Mean - Median to decide central tendency to use
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Excit_hist.jpeg')
-hist(excit_summary$diff, main = 'Excitatory Cells Mean - Median', 
-     xlab = 'mean - median')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Unlab_hist.jpeg')
-hist(unlab_summary$diff, main = 'Unlabelled Cells Mean - Median', 
-     xlab = 'mean - median')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Inhib_hist.jpeg')
-hist(inhib_summary$diff, main = 'Inhibitory Cells Mean - Median', 
-     xlab = 'mean - median')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Astro_hist.jpeg')
-hist(astro_summary$diff, main = 'Astrocytes Mean - Median', 
-     xlab = 'mean - median')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Oligo_hist.jpeg')
-hist(oligo_summary$diff, main = 'Oligodendrocytes Mean - Median', 
-     xlab = 'mean - median')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/OPC_hist.jpeg')
-hist(opc_summary$diff, main = 'Oligo Precrusor Cells Mean - Median', 
-     xlab = 'mean - median')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Microglia_hist.jpeg')
-hist(microglia_summary$diff, main = 'Microglia Mean - Median', 
-     xlab = 'mean - median')
-dev.off()
+mtg_summary <- stats(mtg$exp)
+v1c_summary <- stats(v1c$exp)
+cgg_summary <- stats(cgg$exp)
+m1lm_summary <- stats(m1lm$exp)
+s1ul_summary <- stats(s1ul$exp)
+s1lm_summary <- stats(s1lm$exp)
+m1ul_summary <- stats(m1ul$exp)
+a1c_summary <- stats(a1c$exp)
 
 
 # Cell Type Specificity Scoring ------------------------------------------------
 
-# Dataframe with medians of all features by Broad Cell type
-features <- as.data.frame(names(cpm_exp))
-features <- as.data.frame(features[-1, ])
-colnames(features)[1] <- 'features'
+# Broad Cell Type scoring
+broad_cells <- c('exc_summary','inh_summary','unk_summary','astro_summary',
+                 'oligo_summary','opc_summary','micro_summary')
+broad_cell_comp <- composition(broad_cells)
 
-# Median of features by Broad Cell Type
-inhib_med <- left_join(features, inhib_summary[, c(1,4)], by = 'features')
-unlab_med <- left_join(features, unlab_summary[, c(1,4)], by = 'features')
-excit_med <- left_join(features, excit_summary[, c(1,4)], by = 'features')
-astro_med <- left_join(features, astro_summary[, c(1,4)], by = 'features')
-oligo_med <- left_join(features, oligo_summary[, c(1,4)], by = 'features')
-opc_med <- left_join(features, opc_summary[, c(1,4)], by = 'features')
-microglia_med <- left_join(features, microglia_summary[, c(1,4)], by = 'features')
-
-features_med <- cbind(inhib_med[, 2], unlab_med[, 2], excit_med[, 2],
-                      astro_med[, 2], oligo_med[, 2], opc_med[, 2],
-                      microglia_med[, 2])
-features_med <- cbind(features, features_med)
-features_med[is.na(features_med)] <- 0
-colnames(features_med) <- c('features', 'Inhibitory','Unlabelled','Excitatory',
-                            'Astrocytes', 'Oligodendrocytes', 'OPC', 'Microglia')
-features_med[, -1] <- 2^features_med[, -1] # Undo log transform so x > 0
-features_med[features_med == 1] <- 0
-features_med$sum <- apply(features_med[, -1], 1, FUN = sum)
-features_med <- features_med[-1, ]
-
-# Proportion Composition by Median as Cell Type Score
-composition <- features_med[, c(-1,-9)]/features_med[, 9]
-composition[is.na(composition)] <- 0
-composition <- cbind(features_med[, 1], composition)
-colnames(composition)[1] <- 'features'
-
-
-# Histograms of composition values by cell type
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Inhib_comp.jpeg')
-hist(composition$Inhib[composition$Inhib != 0], 
-     main = 'Inhibitory Cells Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Unlab_comp.jpeg')
-hist(composition$Unlabelled[composition$Unlabelled != 0], 
-     main = 'Unlabelled Cells Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Excit_comp.jpeg')
-hist(composition$Excitatory[composition$Excitatory != 0], 
-     main = 'Excitatory Cells Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Astro_comp.jpeg')
-hist(composition$Astrocytes[composition$Astrocytes != 0], 
-     main = 'Astrocytes Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Oligo_comp.jpeg')
-hist(composition$Oligodendrocytes[composition$Oligodendrocytes != 0], 
-     main = 'Oligodendrocytes Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/OPC_comp.jpeg')
-hist(composition$OPC[composition$OPC != 0], 
-     main = 'Oligo Precursor Cells Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-jpeg(file = '/home/nperumal/AllenBrainSC/plots/Microglia_comp.jpeg')
-hist(composition$Microglia[composition$Microglia != 0], 
-     main = 'Microglia Composition values', 
-     xlab = 'Composition values')
-dev.off()
-
-
-# Brain region medians
-mtg_med <- left_join(features, mtg_summary[, c(1,4)], by = 'features')
-v1c_med <- left_join(features, v1c_summary[, c(1,4)], by = 'features')
-cgg_med <- left_join(features, cgg_summary[, c(1,4)], by = 'features')
-m1lm_med <- left_join(features, m1lm_summary[, c(1,4)], by = 'features')
-s1ul_med <- left_join(features, s1ul_summary[, c(1,4)], by = 'features')
-s1lm_med <- left_join(features, s1lm_summary[, c(1,4)], by = 'features')
-m1ul_med <- left_join(features, m1ul_summary[, c(1,4)], by = 'features')
-a1c_med <- left_join(features, a1c_summary[, c(1,4)], by = 'features')
-
-features_med_region <- cbind(mtg_med[, 2], v1c_med[, 2], cgg_med[, 2],
-                      m1lm_med[, 2], s1ul_med[, 2], s1lm_med[, 2],
-                      m1ul_med[, 2], a1c_med[, 2])
-features_med_region <- cbind(features, features_med_region)
-features_med_region[is.na(features_med_region)] <- 0
-colnames(features_med_region) <- c('features', 'MTG','V1C','CgG',
-                            'M1lm', 'S1ul', 'S1lm', 'M1ul', 'A1C')
-features_med_region[, -1] <- 2^features_med_region[, -1] #Undo log transform so x>0
-features_med_region[features_med_region == 1] <- 0
-features_med_region$sum <- apply(features_med_region[, -1], 1, FUN = sum)
-features_med_region <- features_med_region[-1, ]
-
-# Proportion Composition by Median as Cell Type Score
-composition_region <- features_med_region[, c(-1,-10)]/features_med_region[, 10]
-composition_region[is.na(composition_region)] <- 0
-composition_region <- cbind(features_med_region[, 1], composition_region)
-colnames(composition_region)[1] <- 'features'
-
-
-# UpSet Plots
-ups <- features_med
-ups[ups != 0] <- 1
-
-ups_region <- features_med_region
-ups_region[ups_region != 0] <- 1
-
-# Upset plot broad cell type saved as jpeg
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/UpSet_Broad_Cell_Types.jpeg')
-upset(ups, sets = names(ups)[c(-1,-9)], 
+upset(broad_cell_comp$ups, sets = names(broad_cell_comp$ups)[c(-1,-9)], 
       order.by = 'freq',
       mainbar.y.label = 'Broad Cell Type Intersection', 
       sets.x.label = 'Broad Cell Type') 
 dev.off()
 
-#UpSet Plot by region saved as jpeg
+
+# Scoring by Region
+region_list <- c('mtg_summary','v1c_summary','cgg_summary','m1lm_summary',
+                 's1ul_summary', 's1lm_summary', 'm1ul_summary', 'a1c_summary')
+region_comp <- composition(region_list)
+
 jpeg(file = '/home/nperumal/AllenBrainSC/plots/UpSet_Brain_Region.jpeg')
-upset(as.data.frame(ups_region), 
-      sets = names(ups_region)[c(-1,-10)], 
+upset(region_comp$ups, 
+      sets = names(region_comp$ups)[c(-1,-10)], 
       order.by = 'freq')
 dev.off()
 
@@ -491,56 +288,6 @@ all.annotations = list(
   assay = 'SMART-Seq2'
 )
 
-# Counts Table for Broad Cell type per Brain Regions
-write.csv(cpm_exp,
-          file = 'CPM_Normalized.csv',
-          quote = FALSE
-)
-
-CPM_dat <- synStore( File(
-  path = 'CPM_Normalized.csv',
-  name = 'CPM Normalized Gene Expression Matrix',
-  parentId = activity$properties$id),
-  activityName = activityName,
-  activityDescription = activityDescription
-)
-synapser::synSetAnnotations(CPM_dat, annotations = all.annotations)
-file.remove('CPM_Normalized.csv')
-
-
-# Counts Table for Broad Cell type per Brain Regions
-write.csv(regional_class,
-          file = 'Counts_Broad_Type_vs_Brain_Region.csv',
-          quote = FALSE
-)
-
-CountsTable <- synStore( File(
-  path = 'Counts_Broad_Type_vs_Brain_Region.csv',
-  name = 'Counts of Broad Cell Types based on Brain Region',
-  parentId = activity$properties$id),
-  activityName = activityName,
-  activityDescription = activityDescription
-)
-synapser::synSetAnnotations(CountsTable, annotations = all.annotations)
-file.remove('Counts_Broad_Type_vs_Brain_Region.csv')
-
-
-# Inhibitory Cell Types
-write.csv(inhib_data,
-          file = 'Inhibitory_Cells.csv',
-          quote = FALSE
-)
-
-Inhib <- synStore( File(
-  path = 'Inhibitory_Cells.csv',
-  name = 'Subset of Inhibitory Cells from Allen Brain data',
-  parentId = activity$properties$id),
-  activityName = activityName,
-  activityDescription = activityDescription
-)
-synapser::synSetAnnotations(Inhib, annotations = all.annotations)
-file.remove('Inhibitory_Cells.csv')
-
 
 # Excitatory Cell Types
 write.csv(excit_data,
@@ -559,125 +306,6 @@ synapser::synSetAnnotations(Excit, annotations = all.annotations)
 file.remove('Excitatory_Cells.csv')
 
 
-# Non Neuronal Cell Types
-#write.csv(non_data,
-#          file = 'Non_Neuronal_Cells.csv',
-#          quote = FALSE
-#)
-
-#Non <- synStore( File(
-#  path = 'Non_Neuronal_Cells.csv',
-#  name = 'Subset of Non Neuronal Cells from Allen Brain data',
-#  parentId = activity$properties$id),
-# activityName = activityName,
-#  activityDescription = activityDescription
-#)
-#synapser::synSetAnnotations(Non, annotations = all.annotations)
-#file.remove('Non_Neuronal_Cells.csv')
-
-
-# Unlabelled Cells
-write.csv(unlab_data,
-          file = 'Unlabelled_Cells.csv',
-          quote = FALSE
-)
-
-Unlab <- synStore( File(
-  path = 'Unlabelled_Cells.csv',
-  name = 'Subset of Unlabelled Cells from Allen Brain data',
-  parentId = activity$properties$id),
-  activityName = activityName,
-  activityDescription = activityDescription
-)
-synapser::synSetAnnotations(Unlab, annotations = all.annotations)
-file.remove('Unlabelled_Cells.csv')
-
-
-# Missing Features push to synapse (just replaced names for each file)
-write.csv(microglia_data_rm,
-          file = 'microglia_data_rm.csv',
-          quote = FALSE
-)
-
-microglia_rm_dat <- synStore( File(
-  path = 'microglia_data_rm.csv',
-  name = 'Microglia Missing Features pruned',
-  parentId = activity$properties$id),
-  activityName = activityName,
-  activityDescription = activityDescription
-)
-synapser::synSetAnnotations(microglia_rm_dat, annotations = all.annotations)
-file.remove('microglia_data_rm.csv')
-
-
-# Missing feature brain region push to synapse (just changed the name)
-write.csv(MTG,
-          file = 'MTG.csv',
-          quote = FALSE
-)
-
-mtg <- synStore( File(
-  path = 'MTG.csv',
-  name = 'MTG Missing Features pruned',
-  parentId = activity$properties$id),
-  activityName = activityName,
-  activityDescription = activityDescription
-)
-synapser::synSetAnnotations(mtg, annotations = all.annotations)
-file.remove('MTG.csv')
-
-
-# Unlabelled Cells Feature Summary 
-write.csv(unlab_summary,
-          file = 'Unlabelled_Summary.csv',
-          quote = FALSE
-)
-
-Unlab_sum <- synStore( File(
-  path = 'Unlabelled_Summary.csv',
-  name = 'Unlabelled Cells Summary Statistics by Feature',
-  parentId = activity$properties$id),
-  activityName = activityName,
-  activityDescription = activityDescription
-)
-synapser::synSetAnnotations(Unlab_sum, annotations = all.annotations)
-file.remove('Unlabelled_Summary.csv')
-
-
-# Inhibitory Cells Feature Summary 
-write.csv(inhib_summary,
-          file = 'Inhib_Summary.csv',
-          quote = FALSE
-)
-
-Inhib_sum <- synStore( File(
-  path = 'Inhib_Summary.csv',
-  name = 'Inhibitory Cells Summary Statistics by Feature',
-  parentId = activity$properties$id),
-  activityName = activityName,
-  activityDescription = activityDescription
-)
-synapser::synSetAnnotations(Inhib_sum, annotations = all.annotations)
-file.remove('Inhib_Summary.csv')
-
-
-# Nonneuronal Cells Feature Summary 
-#write.csv(non_summary,
-#          file = 'Non_Summary.csv',
-#         quote = FALSE
-#)
-
-#Non_sum <- synStore( File(
-#  path = 'Non_Summary.csv',
-#  name = 'Non Neuronal Cells Summary Statistics by Feature',
-#  parentId = activity$properties$id),
-#  activityName = activityName,
-#  activityDescription = activityDescription
-#)
-#synapser::synSetAnnotations(Non_sum, annotations = all.annotations)
-#file.remove('Non_Summary.csv')
-
-
 # Percent Composition Data frame
 write.csv(composition,
           file = 'composition.csv',
@@ -693,4 +321,3 @@ comp <- synStore( File(
 )
 synapser::synSetAnnotations(comp, annotations = all.annotations)
 file.remove('composition.csv')
-
