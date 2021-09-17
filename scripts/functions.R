@@ -427,12 +427,13 @@ prune_quant <- function(exp, met, region, is.specific = NULL,
     stop(paste0('Must specify is.specific with boolean value'))
   }
 
+  broad_cell_list <- unique(met$broad_cell)[-10] #not enough VLMC cells
   
   output_list <- c()
   spec_list <- c()
-if (result == 'feature_name') {
-      if(is.specific == FALSE){
-        for (i in unique(met$broad_cell)) {
+  if (result == 'feature_name') {
+    if(is.specific == FALSE){
+      for (i in broad_cell_list) {
         data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1,
                            region = region, is.broad = TRUE, cell_t = i)
         command <- paste0(
@@ -440,10 +441,10 @@ if (result == 'feature_name') {
         )
         eval(parse(text=command))
 
-      }
-    }else{
+        }
+      }else{
 
-      for (i in unique(met$broad_cell)) {
+    for (i in broad_cell_list) {
       data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
                          region = region, is.broad = TRUE, cell_t = i)
       
@@ -463,10 +464,10 @@ if (result == 'feature_name') {
         eval(parse(text=command1))
       }
     }
-}else{
+  }else{
   
   if(is.specific == FALSE){
-    for (i in unique(met$broad_cell)) {
+    for (i in broad_cell_list) {
       data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1,
                          region = region, is.broad = TRUE, cell_t = i)
       command <- paste0(
@@ -477,7 +478,7 @@ if (result == 'feature_name') {
     }
   }else{
     
-    for (i in unique(met$broad_cell)) {
+    for (i in broad_cell_list) {
       data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
                          region = region, is.broad = TRUE, cell_t = i)
       
