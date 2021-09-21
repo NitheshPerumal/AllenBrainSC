@@ -240,7 +240,7 @@ rep_space <- function( input, repchar='_' ){
 }
 
 
-#' Expression Filter Test
+#' Expression Filter 
 #' Tests a filter schema on a user defined cut of the data
 #' 
 #' @usage 
@@ -381,6 +381,85 @@ filter_dat <- function(exp, met, pcnt = .5, value = 1,
                features = features,
                count_coverage = count_coverage) )
   
+}
+
+
+#' Combined region analysis
+#' @param exp gene expression matrix
+#' @param met meta data
+#' @param region1_name name of region 1 in the combined region analysis
+#' @param region2_name name of region 2 in the combined region analysis
+#' @return a list object of overall region analysis (list$overall),
+#' combined region feature comparison (list$feature_analysis), combined region 
+#' count coverage comparison (list$coverage_analysis), and spearman correlation
+#' coefficient for the two regions (list$corr)
+
+comb_region <- function(exp, met, region1_name, region2_name){
+  
+  region1 <- filter_dat(exp = exp, met = met, is.broad = FALSE, 
+                              region = region1_name)
+  
+  region2 <- filter_dat(exp = exp, met = met, is.broad = FALSE, 
+                              region = region2_name)
+  
+  region_comb <- filter_dat(exp = exp, met = met, is.broad = FALSE, 
+                            region = c(region1_name, region2_name))
+   
+  region_overall <- data.frame('subset' = c('combined', 
+                                         region1_name, 
+                                         region2_name),
+                            'features' = c(region_comb$features, 
+                                           region1$features, 
+                                           region2$features),
+                            'count_coverage'= c(region_comb$count_coverage, 
+                                                region1$count_coverage, 
+                                                region2$count_coverage)
+                            )
+  
+  comb_cell_types <- unique(region_comb$met$cell_type_alias_label)[10:20]
+  
+  comb_feature_analysis <- region_overall[,1]
+  comb_coverage_analysis <- region_overall[,1]
+  for (i in comb_cell_types) {
+    full <- filter_dat(exp = exp, met = met, region = c(region1_name, region2_name), 
+                       is.broad = FALSE, cell_t = i)
+    upper <- filter_dat(exp = exp, met = met, region = region1_name, 
+                        is.broad = FALSE, cell_t = i)
+    lower <- filter_dat(exp = exp, met = met, region = region2_name, 
+                        is.broad = FALSE, cell_t = i)
+    
+    full_f <- full$features
+    upper_f <- upper$features
+    lower_f <- lower$features
+    
+    full_c <- full$count_coverage
+    upper_c <- upper$count_coverage
+    lower_c <- lower$count_coverage
+    
+    
+    comb_feature_analysis <- cbind(comb_feature_analysis, rbind(full_f,upper_f,lower_f))
+    comb_coverage_analysis <- cbind(comb_coverage_analysis, rbind(full_c,upper_c,lower_c))
+  } 
+  
+  colnames(comb_feature_analysis) <- c('subset', comb_cell_types)
+  colnames(comb_coverage_analysis) <- c('subset', comb_cell_types)
+  
+  upper_mean_comb <- as.data.frame(apply(upper$exp,1,mean))
+  lower_mean_comb <- as.data.frame(apply(lower$exp,1,mean))
+  comb_mean <- merge(upper_mean_comb,lower_mean_comb, by =0)
+  
+  sp_cor <- cor.test(comb_mean[,2], comb_mean[,3], 
+                     method = 'spearman', exact = FALSE)$estimate
+  #hist(apply(upper$exp,1,median), xlim = c(0,2000), breaks =100)
+  #hist(apply(lower$exp,1,median), xlim = c(0,2000), breaks =100)
+  
+  
+  return(list(
+    overall = region_overall,
+    feature_analysis = comb_feature_analysis,
+    coverage_analysis = comb_coverage_analysis,
+    corr = sp_cor
+  ))
 }
 
 

@@ -107,6 +107,26 @@ astro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Astro
 oligo <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Oligo')
 opc <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'OPC')
 micro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Micro')
+endo <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Endo')
+peri <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Peri')
+
+
+broad_feature_list <-c(rownames(exc$exp), rownames(inh$exp), rownames(unk$exp),
+                       rownames(astro$exp), rownames(oligo$exp), rownames(opc$exp),
+                       rownames(micro$exp), rownames(endo$exp), rownames(peri$exp))
+broad_feature_unique <- table(table(broad_feature_list))[1]
+broad_feature_overlap <- table(table(broad_feature_list))[9]
+
+
+broad_feature_count <- as.data.frame(c(exc$features, inh$features, unk$features, 
+                                       astro$features, oligo$features, 
+                                       opc$features, micro$features, 
+                                       endo$features, peri$features,
+                                       length(unique(broad_feature_list)) ))
+
+broad_cell_list <- as.data.frame(c(unique(meta$broad_cell)[-10], 'all_cells'))
+feature_overview <- cbind(broad_cell_list, broad_feature_count)
+colnames(feature_overview) <- c('Cell type','Feature count')
 
 
 # Missing feature pruned data pulling from synapse
@@ -158,105 +178,9 @@ a1c <- filter_dat(exp = gene_exp, met = meta, region = 'A1C')
 #   synapser::synGet('syn25986018')$path))[, c(-1,-2)]
 
 
-# Combined region analysis 
-s1_region <- filter_dat(exp = gene_exp, met = meta, is.broad = FALSE, 
-                        region = c('S1ul','S1lm'))
-s1_comb <- data.frame('subset' = c('s1','s1ul', 's1lm'),
-                      'features' = c(s1_region$features, s1ul$features, s1lm$features),
-                      'count_coverage'= c(s1_region$count_coverage, s1ul$count_coverage, 
-                                          s1lm$count_coverage))
-
-m1_region <- filter_dat(exp = gene_exp, met = meta, is.broad = FALSE, 
-                        region = c('M1ul','M1lm'))
-m1_comb <- data.frame('subset' = c('m1','m1ul', 'm1lm'),
-                      'features' = c(m1_region$features, m1ul$features, m1lm$features),
-                      'count_coverage'= c(m1_region$count_coverage, m1ul$count_coverage, 
-                                          m1lm$count_coverage))
-
-
-s1_cell_types <- unique(s1_region$met$cell_type_alias_label)
-s1ul_cell_types <- unique(s1ul$met$cell_type_alias_label)
-s1lm_cell_types <- unique(s1lm$met$cell_type_alias_label)
-
-s1_subtype <- s1_cell_types[s1_cell_types %in% s1ul_cell_types]
-s1_subtype <- s1_subtype[s1_subtype %in% s1lm_cell_types]
-s1_subtype <- s1_subtype[c(-5,-23,-31,-33,-34,-43,-73,-78,-85,-90,-99,
-                           -101,-102,-104,-105,-107)]
-
-s1_feature_analysis <- s1_comb[1]
-s1_coverage_analysis <- s1_comb[1]
-for (i in s1_subtype) {
-  full <- filter_dat(exp = gene_exp, met = meta, region = c('S1ul','S1lm'), 
-                    is.broad = FALSE, cell_t = i)
-  upper <- filter_dat(exp = gene_exp, met = meta, region = 'S1ul', 
-                     is.broad = FALSE, cell_t = i)
-  lower <- filter_dat(exp = gene_exp, met = meta, region = 'S1lm', 
-                     is.broad = FALSE, cell_t = i)
-  full_f <- full$features
-  upper_f <- upper$features
-  lower_f <- lower$features
-  
-  full_c <- full$count_coverage
-  upper_c <- upper$count_coverage
-  lower_c <- lower$count_coverage
-  
-  
-  s1_feature_analysis <- cbind(s1_feature_analysis, rbind(full_f,upper_f,lower_f))
-  s1_coverage_analysis <- cbind(s1_coverage_analysis, rbind(full_c,upper_c,lower_c))
-} 
-colnames(s1_feature_analysis) <- c('subset', s1_subtype[1:(ncol(s1_feature_analysis)-1)])
-colnames(s1_coverage_analysis) <- c('subset', s1_subtype[1:(ncol(s1_feature_analysis)-1)])
-
-upper_mean_s1 <- as.data.frame(apply(upper$exp,1,mean))
-lower_mean_s1 <- as.data.frame(apply(lower$exp,1,mean))
-s1_mean <- merge(upper_mean_s1,lower_mean_s1, by =0)
-
-cor.test(s1_mean[,2], s1_mean[,3], method = 'spearman', exact = FALSE)
-hist(apply(upper$exp,1,median), xlim = c(0,2000), breaks =100, main = 's1 upper')
-hist(apply(lower$exp,1,median), xlim = c(0,2000), breaks =100, main = 's1 lower')
-
-
-# M1 region
-m1_cell_types <- unique(m1_region$met$cell_type_alias_label)
-m1ul_cell_types <- unique(m1ul$met$cell_type_alias_label)
-m1lm_cell_types <- unique(m1lm$met$cell_type_alias_label)
-
-m1_subtype <- m1_cell_types[m1_cell_types %in% m1ul_cell_types]
-m1_subtype <- m1_subtype[m1_subtype %in% m1lm_cell_types]
-m1_subtype <- m1_subtype[c(-24,-26,-81,-85,-86,-93,-95,-98,-105,-106,
-                           -109,-110,-111,-112,-113)]
-
-m1_feature_analysis <- m1_comb[1]
-m1_coverage_analysis <- m1_comb[1]
-for (i in m1_subtype) {
-  full <- filter_dat(exp = gene_exp, met = meta, region = c('M1ul','M1lm'), 
-                     is.broad = FALSE, cell_t = i)
-  upper <- filter_dat(exp = gene_exp, met = meta, region = 'M1ul', 
-                      is.broad = FALSE, cell_t = i)
-  lower <- filter_dat(exp = gene_exp, met = meta, region = 'M1lm', 
-                      is.broad = FALSE, cell_t = i)
-  full_f <- full$features
-  upper_f <- upper$features
-  lower_f <- lower$features
-  
-  full_c <- full$count_coverage
-  upper_c <- upper$count_coverage
-  lower_c <- lower$count_coverage
-
-  
-  m1_feature_analysis <- cbind(m1_feature_analysis, rbind(full_f,upper_f,lower_f))
-  m1_coverage_analysis <- cbind(m1_coverage_analysis, rbind(full_c,upper_c,lower_c))
-} 
-colnames(m1_feature_analysis) <- c('subset', m1_subtype[1:(ncol(m1_feature_analysis)-1)])
-colnames(m1_coverage_analysis) <- c('subset', m1_subtype[1:(ncol(m1_feature_analysis)-1)])
-
-upper_mean_m1 <- as.data.frame(apply(upper$exp,1,mean))
-lower_mean_m1 <- as.data.frame(apply(lower$exp,1,mean))
-m1_mean <- merge(upper_mean_m1,lower_mean_m1, by =0)
-
-cor.test(m1_mean[,2], m1_mean[,3], method = 'spearman', exact = FALSE)
-hist(apply(upper$exp,1,median), xlim = c(0,2000), breaks =200, main = 'm1 upper')
-hist(apply(lower$exp,1,median), xlim = c(0,2000), breaks =200, main = 'm1 lower')
+#Combined region analysis for s1 and m1
+s1_comb_analysis <- comb_region(exp = gene_exp, met = meta, 'S1ul', 'S1lm')
+m1_comb_analysis <- comb_region(exp = gene_exp, met = meta, 'M1ul', 'M1lm')
 
 
 # Heatmap of regions
