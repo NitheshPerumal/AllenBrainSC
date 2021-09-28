@@ -243,6 +243,22 @@ a1c_spec_feature_list <- prune_quant(exp = gene_exp, met = meta, region = 'A1C',
                                      is.specific = TRUE, result ='feature_name')
 
 
+# Third quartile and mean of third quart for each broad cell type
+mtg_third_quart <- third_quart(exp = gene_exp, met = meta, region = 'MTG')
+v1c_third_quart <- third_quart(exp = gene_exp, met = meta, region = 'V1C')
+cgg_third_quart <- third_quart(exp = gene_exp, met = meta, region = 'CgG')
+m1_third_quart <- third_quart(exp = gene_exp, met = meta, region = c('M1lm','M1ul'))
+s1_third_quart <- third_quart(exp = gene_exp, met = meta, region = c('S1lm','S1ul'))
+a1c_third_quart <- third_quart(exp = gene_exp, met = meta, region = 'A1C')
+
+mtg_mean_quant <- mean_quant(mtg_third_quart)
+v1c_mean_quant <- mean_quant(v1c_third_quart)
+cgg_mean_quant <- mean_quant(cgg_third_quart)
+m1_mean_quant <- mean_quant(m1_third_quart)
+s1_mean_quant <- mean_quant(s1_third_quart)
+a1c_mean_quant <- mean_quant(a1c_third_quart)
+
+
 # Generating summary statistics 
 exc_summary <- stats(exc$exp)
 unk_summary <- stats(unk$exp)

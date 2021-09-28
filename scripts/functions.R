@@ -99,7 +99,6 @@ cutoff_analysis <- function(cell_list) {
 }
 
 
-
 #' Quantile based pruning
 #' Prune features based on quantile cutoff 0.8
 #' @param x datframe of gene expression matrix
@@ -458,8 +457,7 @@ comb_region <- function(exp, met, region1_name, region2_name){
     overall = region_overall,
     feature_analysis = comb_feature_analysis,
     coverage_analysis = comb_coverage_analysis,
-    corr = sp_cor
-  ))
+    corr = sp_cor))
 }
 
 
@@ -489,10 +487,9 @@ comb_region <- function(exp, met, region1_name, region2_name){
 #' (list$feature_name) or (list$exp_matrix)
 #' 
 #' @export 
-#' 
 
 prune_quant <- function(exp, met, region, is.specific = NULL,
-                  result = c('feature_name','exp_matrix')) {
+                        result = c('feature_name','exp_matrix')) {
   if (missing(exp)) {
     stop(paste0('Must specify expression matrix'))
   }
@@ -505,7 +502,14 @@ prune_quant <- function(exp, met, region, is.specific = NULL,
   if (missing(is.specific)) {
     stop(paste0('Must specify is.specific with boolean value'))
   }
-
+  if (result != 'feature_name' && result != 'exp_matrix') {
+    stop(paste0('Result must be either feature_name or exp_matrix'))
+  }
+  if (is.third.quant == TRUE && is.specific == FALSE) {
+    stop(paste0('is.specific must be TRUE to use is.third.quant'))
+  }
+  
+  
   broad_cell_list <- unique(met$broad_cell)[-10] #not enough VLMC cells
   
   output_list <- c()
@@ -519,8 +523,8 @@ prune_quant <- function(exp, met, region, is.specific = NULL,
           'output_list <- c(output_list,"', i,'"= list(rownames(quant(data$exp,0.5))))'
         )
         eval(parse(text=command))
-
-        }
+      }
+      
       }else{
 
     for (i in broad_cell_list) {
@@ -531,12 +535,13 @@ prune_quant <- function(exp, met, region, is.specific = NULL,
             
         data_sub <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
                               is.broad = FALSE, cell_t = j)
+        
         command <- paste0(
           'spec_list <- c(spec_list,"', j,'"= list(rownames(quant(data_sub$exp,0.5))))'
         )
         eval(parse(text=command))
         }
-          
+      
         command1 <- paste0(
         'output_list <- c(output_list,"', i,'"= list(spec_list))'
         )
@@ -545,42 +550,123 @@ prune_quant <- function(exp, met, region, is.specific = NULL,
     }
   }else{
   
-  if(is.specific == FALSE){
-    for (i in broad_cell_list) {
-      data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1,
-                         region = region, is.broad = TRUE, cell_t = i)
-      command <- paste0(
-        'output_list <- c(output_list,"', i,'"= list(quant(data$exp,0.5)))'
-      )
-      eval(parse(text=command))
-      
-    }
-  }else{
-    
-    for (i in broad_cell_list) {
-      data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
-                         region = region, is.broad = TRUE, cell_t = i)
-      
-      for (j in unique(data$met$cell_type_alias_label)) {
-        
-        data_sub <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
-                               is.broad = FALSE, cell_t = j)
+    if (is.specific == FALSE) {
+      for (i in broad_cell_list) {
+        data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1,
+                           region = region, is.broad = TRUE, cell_t = i)
         command <- paste0(
-          'spec_list <- c(spec_list,"', j,'"= list(quant(data_sub$exp,0.5)))'
+          'output_list <- c(output_list,"', i,'"= list(quant(data$exp,0.5)))'
         )
         eval(parse(text=command))
-      }
       
+      }
+    }else{
+    
+      for (i in broad_cell_list) {
+        data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
+                           region = region, is.broad = TRUE, cell_t = i)
+      
+        for (j in unique(data$met$cell_type_alias_label)) {
+        
+         data_sub <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
+                                is.broad = FALSE, cell_t = j)
+         
+            command <- paste0(
+              'spec_list <- c(spec_list,"', j,'"= list(quant(data_sub$exp,0.5)))'
+            )
+            eval(parse(text=command))
+        }
+      
+
       command1 <- paste0(
         'output_list <- c(output_list,"', i,'"= list(spec_list))'
       )
       eval(parse(text=command1))
+      }
     }
   }
- }
   
   return(output_list)
   
+}
+
+
+#' Function to find third quartile CPM value of specific cell types with more
+#' than 50 samples by broad cell type
+#' 
+#'  @param exp gene expression matrix
+#'  @param met meta data for expression matrix
+#'  @param region region for analysis
+#'  @return list object with specific cell type vectors for each broad cell type 
+
+third_quart <- function(exp, met, region) {
+  
+  broad_cell_list <- unique(met$broad_cell)[-10] #not enough VLMC cells
+  
+  output_list <- c()
+  spec_list <- c()
+  
+  for (i in broad_cell_list) {
+    data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
+                       region = region, is.broad = TRUE, cell_t = i)
+    
+    for (j in unique(data$met$cell_type_alias_label)) {
+      
+      data_sub <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
+                             is.broad = FALSE, cell_t = j)
+      
+      
+      if (length(names(data_sub$exp)) >= 50) {
+        command <- paste0(
+          'spec_list <- c(spec_list,"', j,'"= list(apply(data_sub$exp, 1, function(x) quantile(x)["75%"])))'
+        )
+        eval(parse(text=command))
+      }
+    }
+    
+    
+    command1 <- paste0(
+      'output_list <- c(output_list,"', i,'"= list(spec_list))'
+    )
+    eval(parse(text=command1))
+  }
+  
+  return(output_list)
+}
+
+
+#' Mean of third quantile list obj function
+#' @param input list object of each region i.e. v1c$Unk
+#' @return out_mean mean of third quartile for each gene by region
+
+mean_quant_calc <- function(input) {
+  out <- c()
+  setup <- lapply(input, function(x) rownames_to_column(as.data.frame(x), 
+                                                        var = "Row.names"))
+  mean_input <- Reduce(function(x,y) merge(x,y, by = 'Row.names', all = TRUE), 
+                       setup)
+  mean_input <- column_to_rownames(mean_input, var = "Row.names")
+  out_mean <- apply(mean_input, 1, function(x) mean(x,na.rm=TRUE))
+  return(out_mean)
+}
+
+
+#' List of third quantile mean by region
+#' Uses mean_quant_calc to create list objects of cell types by region
+#' @param list_obj of third quartile expression for expression by specific
+#' cell type, per broad cell type, per region. From third_quant().
+#' @return out_list list object of mean third quartile per broad cell type
+
+mean_quant <- function(list_obj) {
+  ncores <- as.numeric(detectCores() - 1)
+  out_list <-c()
+  label <- names(list_obj)
+  
+  out_list <- c(out_list, mclapply(list_obj, mc.cores = ncores, mean_quant_calc))
+  
+  names(out_list) <- label
+  
+  return(out_list)
 }
 
 
