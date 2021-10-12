@@ -213,7 +213,7 @@ region_cor <- cor(region_mean, use = 'complete.obs', method = 'spearman')
 heatmap(region_cor, symm = TRUE)
 
  
-# Analyzing different cutoffs to determine cutoff threshold
+# Analyzing different Median cutoffs to determine cutoff threshold
 cell_type_list <- c('exc','inh','unk','astro','oligo','opc','micro')
 broad_cell_cutoff_analysis <- cutoff_analysis(cell_type_list)
 
@@ -244,12 +244,13 @@ a1c_spec_feature_list <- prune_quant(exp = gene_exp, met = meta, region = 'A1C',
 
 
 # Third quartile and mean of third quart for each broad cell type
-mtg_third_quart <- third_quart(exp = gene_exp, met = meta, region = 'MTG')
+mtg_third_quart <- third_quart(exp = gene_exp, met = meta, region = 'MTG') 
 v1c_third_quart <- third_quart(exp = gene_exp, met = meta, region = 'V1C')
 cgg_third_quart <- third_quart(exp = gene_exp, met = meta, region = 'CgG')
 m1_third_quart <- third_quart(exp = gene_exp, met = meta, region = c('M1lm','M1ul'))
 s1_third_quart <- third_quart(exp = gene_exp, met = meta, region = c('S1lm','S1ul'))
 a1c_third_quart <- third_quart(exp = gene_exp, met = meta, region = 'A1C')
+
 
 mtg_mean_quant <- mean_quant(mtg_third_quart)
 v1c_mean_quant <- mean_quant(v1c_third_quart)
@@ -257,6 +258,78 @@ cgg_mean_quant <- mean_quant(cgg_third_quart)
 m1_mean_quant <- mean_quant(m1_third_quart)
 s1_mean_quant <- mean_quant(s1_third_quart)
 a1c_mean_quant <- mean_quant(a1c_third_quart)
+
+# mtg_feature_summ <- feature_summ(mtg_mean_quant, is.length = TRUE)
+# v1c_feature_summ <- feature_summ(v1c_mean_quant, is.length = TRUE)
+# cgg_feature_summ <- feature_summ(cgg_mean_quant, is.length = TRUE)
+# m1_feature_summ <- feature_summ(m1_mean_quant, is.length = TRUE)
+# s1_feature_summ <- feature_summ(s1_mean_quant, is.length = TRUE)
+# a1c_feature_summ <- feature_summ(a1c_mean_quant, is.length = TRUE)
+# 
+# tissue_feature_summ <- rbind(as.data.frame(mtg_feature_summ), as.data.frame(v1c_feature_summ),
+#                              as.data.frame(cgg_feature_summ), as.data.frame(m1_feature_summ),
+#                              as.data.frame(s1_feature_summ), as.data.frame(a1c_feature_summ))
+# 
+# rownames(tissue_feature_summ) <- c('mtg','v1c','cgg','m1','s1','a1c')
+
+
+mtg_feature_summ <- feature_summ(mtg_mean_quant)
+v1c_feature_summ <- feature_summ(v1c_mean_quant)
+cgg_feature_summ <- feature_summ(cgg_mean_quant)
+m1_feature_summ <- feature_summ(m1_mean_quant)
+s1_feature_summ <- feature_summ(s1_mean_quant)
+a1c_feature_summ <- feature_summ(a1c_mean_quant)
+
+
+ups_feature_summ <- as.data.frame(rownames(gene_exp))
+ups_feature_summ <- column_to_rownames(ups_feature_summ, var = 'rownames(gene_exp)')
+for (i in unique(meta$broad_cell)[-10]) {
+  command <- paste0('hist_list <- c(mtg_feature_summ$',i, ',v1c_feature_summ$',i,
+                    ',cgg_feature_summ$',i, ',m1_feature_summ$',i,
+                    ',s1_feature_summ$',i, ',a1c_feature_summ$',i,')')
+  eval(parse(text=command))
+  hist_in <- table(table(hist_list))
+  
+  hist_frame <- as.data.frame(unique(hist_list))
+  hist_frame <- column_to_rownames(hist_frame, var = 'unique(hist_list)')
+  hist_frame[,1] <- 1
+  ups_feature_summ <- merge(ups_feature_summ, hist_frame, by = 0, all = TRUE)
+  ups_feature_summ <- column_to_rownames(ups_feature_summ, var = 'Row.names')
+  colnames(ups_feature_summ)[ncol(ups_feature_summ)] <- i
+  
+  h <- barplot(hist_in, main = i)
+  text(h, 4000 , paste(hist_in, sep="") ,cex=1)
+}
+
+ups_feature_summ[is.na(ups_feature_summ)] <- 0
+upset(ups_feature_summ, sets = names(ups_feature_summ), 
+      order.by = 'freq',
+      mainbar.y.label = 'Feature Overlap by Cells', 
+      sets.x.label = 'Broad Cell Type') 
+
+ups_feature_summ <- as.data.frame(ups_feature_summ)
+
+#ups_13_feat <- rownames(ups_feature_summ[apply(ups_feature_summ, 1, sum) == 4,])
+
+
+cells <- c('Endo', 'Micro', 'Peri', 'OPC')
+for (i in cells) {
+    
+  command <- paste0('
+  hist_dat <- cbind(
+    as.data.frame(mtg_mean_quant$',i,'[ups_13_feat], ups_13_feat),
+    as.data.frame(a1c_mean_quant$',i,'[ups_13_feat], ups_13_feat),
+    as.data.frame(v1c_mean_quant$',i,'[ups_13_feat], ups_13_feat),
+    as.data.frame(m1_mean_quant$',i,'[ups_13_feat], ups_13_feat),
+    as.data.frame(s1_mean_quant$',i,'[ups_13_feat], ups_13_feat),
+    as.data.frame(cgg_mean_quant$',i,'[ups_13_feat], ups_13_feat)
+  )')
+  
+  eval(parse(text=command))
+    
+  hist_in <- apply(hist_dat, 1, function(x) mean(x, na.rm = TRUE))
+  hist(hist_in, breaks = 13, main = i)
+}
 
 
 # Generating summary statistics 

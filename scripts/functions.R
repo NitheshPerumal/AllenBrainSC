@@ -368,7 +368,7 @@ filter_dat <- function(exp, met, pcnt = .5, value = 1,
   
   ## Filter out genes of X percent zeros
   present <- function(x, percent = pcnt) mean(x > value) >= percent
-  filt_exp <- exp[apply(exp, 1, present), ]
+  filt_exp <- as.data.frame(exp[apply(exp, 1, present), ])
   
   
   features <- dim(filt_exp)[1]
@@ -505,9 +505,6 @@ prune_quant <- function(exp, met, region, is.specific = NULL,
   if (result != 'feature_name' && result != 'exp_matrix') {
     stop(paste0('Result must be either feature_name or exp_matrix'))
   }
-  if (is.third.quant == TRUE && is.specific == FALSE) {
-    stop(paste0('is.specific must be TRUE to use is.third.quant'))
-  }
   
   
   broad_cell_list <- unique(met$broad_cell)[-10] #not enough VLMC cells
@@ -599,39 +596,50 @@ prune_quant <- function(exp, met, region, is.specific = NULL,
 #'  @param region region for analysis
 #'  @return list object with specific cell type vectors for each broad cell type 
 
+
 third_quart <- function(exp, met, region) {
   
-  broad_cell_list <- unique(met$broad_cell)[-10] #not enough VLMC cells
+  ncores <- as.numeric(detectCores() - 1)
   
-  output_list <- c()
-  spec_list <- c()
+  # Region subset
+  met_region <- met[met$region_label %in% region,]
   
+  # Remove any specific cell types with less than 50 cells
+  specific_n_50 <- met_region$cell_type_alias_label[table(met_region$cell_type_alias_label) >= 50]
+  met_dat <- met_region[met_region$cell_type_alias_label %in% specific_n_50,]
+  
+  broad_cell_list <- unique(met$broad_cell)[-c(8,9,10)] #not enough Peri, Endo, or VLMC cells
+  
+  out_list <- c()
   for (i in broad_cell_list) {
-    data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
-                       region = region, is.broad = TRUE, cell_t = i)
     
-    for (j in unique(data$met$cell_type_alias_label)) {
-      
-      data_sub <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
-                             is.broad = FALSE, cell_t = j)
-      
-      
-      if (length(names(data_sub$exp)) >= 50) {
-        command <- paste0(
-          'spec_list <- c(spec_list,"', j,'"= list(apply(data_sub$exp, 1, function(x) quantile(x)["75%"])))'
-        )
-        eval(parse(text=command))
-      }
-    }
+    # Specific cell list by broad cell type with more than 50 samples
+    broad_met <- met_dat[met_dat$broad_cell == i,]
+    spec_cell <- unique(broad_met$cell_type_alias_label)
     
+    # Specific cell list expression matrix 
+    spec_filt <- mclapply(spec_cell, function(x)
+      filter_dat(exp = exp, met = broad_met, 
+                 pcnt = 0.5, value = 1, 
+                 region = region, is.broad = FALSE, 
+                 cell_t = x)$exp,
+      mc.cores = ncores 
+    )
+    
+    # Function to apply the quantile calculation
+    quant_app <- function(x) {return(apply(x,1,function(y) quantile(y,0.75)))}
+    
+    # Quantile calcs applied to specific cell expression matrices
+    spec_quant <- mclapply(spec_filt,mc.cores = ncores, function(x) quant_app(x))
+    names(spec_quant) <- spec_cell
     
     command1 <- paste0(
-      'output_list <- c(output_list,"', i,'"= list(spec_list))'
+      'out_list <- c(out_list,"', i,'"= list(spec_quant))'
     )
     eval(parse(text=command1))
   }
   
-  return(output_list)
+  return(out_list)
 }
 
 
@@ -667,6 +675,33 @@ mean_quant <- function(list_obj) {
   names(out_list) <- label
   
   return(out_list)
+}
+
+
+#' Tissue feature analysis
+#' 
+#' @param list_obj list object of mean expression by features for broad cell type
+#' @is.length boolean value indicating whether to return the counts of features or
+#' the mean value vector 
+#' @return list object for each broad cell type and unique features and features
+#' in all cell types
+
+feature_summ <- function(list_obj, is.length = FALSE) {
+  
+  tot_features <- lapply(list_obj, function(x) unname(names(x)))
+  tot_features_unlist <- unlist(tot_features)
+  
+  overlap <- unname(tot_features_unlist[table(tot_features_unlist) == 9])
+  tot_features$tissue_overlap <- unique(overlap)
+  
+  unique_feat <- unname(tot_features_unlist[table(tot_features_unlist) == 1])
+  tot_features$tissue_unique <- unique_feat
+  
+  if (is.length == TRUE) {
+    tot_features <- lapply(tot_features, length)
+  }
+  
+  return(tot_features)
 }
 
 
