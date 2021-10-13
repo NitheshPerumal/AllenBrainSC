@@ -13,10 +13,14 @@ library(data.table)
 library(parallel)
 library(UpSetR)
 library(psych)
-source("AllenBrainSC/scripts/functions.R")
+
+source("scripts/functions.R")
 
  
 # Load Data --------------------------------------------------------------------
+
+#_# Add Login Step
+synapser::synLogin()
 
 # Metadata for Allen Brain dataset
 #meta <- read.csv("rstudio/metadata.csv",header = TRUE, sep = ',')
@@ -81,6 +85,11 @@ write.csv(regional_subclass, file = 'regional_subclass_eda.csv', quote = FALSE)
 class_sub_rel <- as.data.frame.matrix(xtabs(formula = ~subclass_label+class_label, meta))
 write.csv(class_sub_rel, file = 'class_sub_rel_eda.csv', quote = FALSE)
 
+#_# cell_type_alias_label is the more specific cell type
+# Counts of Narrow Cell Types for Broad Cell Types
+class_sub_rel_2 <- as.data.frame.matrix(xtabs(formula = ~cell_type_alias_label+class_label, meta))
+write.csv(class_sub_rel_2, file = 'class_sub_rel_2_eda.csv', quote = FALSE)
+
 # Counts of the most specific distinction vs other two 
 cell_type <- as.data.frame.matrix(xtabs(formula = ~cell_type_accession_label+class_label, meta))
 cell_type_sub <- as.data.frame.matrix(xtabs(formula = ~cell_type_accession_label+subclass_label, meta))
@@ -98,6 +107,213 @@ write.csv(cell_type_sub, file = 'cell_type_sub_eda.csv', quote = FALSE)
 # Refer to Broad Cell type + Tissue Location + 2 Markers
 # Ex: Astro L1-6 FGFR3 ETNPPL
 
+#_# Move combination Up Here:
+#Combined region analysis for s1 and m1
+s1_comb_analysis <- comb_region(exp = gene_exp, met = meta, 'S1ul', 'S1lm')
+m1_comb_analysis <- comb_region(exp = gene_exp, met = meta, 'M1ul', 'M1lm')
+
+table(meta$region_label)
+meta[ grepl('S1',meta$region_label), ]$region_label <- 'S1'
+meta[ grepl('M1',meta$region_label), ]$region_label <- 'M1'
+table(meta$region_label)
+
+################################################################################
+#_# I'm going to test the per-region filtering compared to not.
+#_# I'm going to use micro-glia becuase there's no sub-type substructure
+micro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Micro')
+micro_sink <- micro
+dim(micro_sink$exp)
+# 796 750
+micro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, pcnt = .25, value = .1, cell_t = 'Micro')
+dim(micro$exp)
+# 5436 750
+
+
+micro_test <- list(A1C=NULL,
+                   CgG=NULL,
+                   M1=NULL,
+                   MTG=NULL,
+                   S1=NULL,
+                   V1C=NULL
+)
+features <- list()
+total_features <- NULL
+for( region in names(micro_test)) {
+  micro_test[[region]] <- filter_dat(
+    exp = gene_exp, met = meta,
+    is.broad = FALSE,
+    pcnt = .25, value = .1, 
+    cell_t = 'Micro_L1-6_C1QC', region = region
+)
+  features[[region]] <- row.names(micro_test[[region]]$exp)
+  total_features <- c(total_features,row.names(micro_test[[region]]$exp))
+  total_features <- total_features[!duplicated(total_features)]
+}
+ComplexHeatmap::UpSet( ComplexHeatmap::make_comb_mat(features),
+                       comb_order = order(ComplexHeatmap::comb_size(
+                         ComplexHeatmap::make_comb_mat(features)
+                       )
+                      )
+)
+length(total_features)
+# 7408 unique features across 6 tissues
+dim(micro$exp)
+# 5436 Features if we don't look by region
+
+#_# Comp to sorted cells from validation data:
+vali <- read.table(synapser::synGet('syn26275022')$path, 
+                          header = T, sep = '\t'
+                  ) %>%
+  tibble::column_to_rownames('feature') 
+vali <- as.data.frame(edgeR::cpm(as.matrix(vali)))
+
+cov <- read.table(synapser::synGet('syn26275021')$path, 
+                  header = T, sep = '\t'
+) %>%
+  tibble::column_to_rownames('sample')
+
+vali_filt <- vali[ , row.names(cov[cov$cell_type == 'Myeloid',])]
+vali_filt <- apply(vali_filt, 1, mean)
+
+table(vali_filt>=1) 
+# FALSE  TRUE 
+# 11030 14343
+
+#load biomart
+bm <- read.table(synapser::synGet('syn26275023')$path, 
+                   header = T, sep = '\t'
+) %>%
+  tibble::column_to_rownames('ensembl_gene_id')
+
+table( total_features %in% bm[names(vali_filt>=1),]$hgnc_symbol )
+#FALSE  TRUE 
+#1202  6206
+table( row.names(micro$exp) %in% bm[names(vali_filt>=1),]$hgnc_symbol )
+################################################################################
+
+######################
+#_# look into first filtering along fine cell type with-in region THEN combining
+Exc <- list(A1C=list(),
+            CgG=list(),
+            M1=list(),
+            MTG=list(),
+            S1=list(),
+            V1C=list()
+)
+features_exc <- list()
+total_features_exc <- NULL
+
+cells <- names(table(meta[meta$broad_cell == 'Exc',]$cell_type_alias_label))
+# Loop Regions names(Exc)[]
+for(region in names(Exc)) {
+  # Loop Specific Cell_types
+  for(cell_type in cells) {
+    Exc[[region]][[cell_type]] <- filter_dat(
+      exp = gene_exp, met = meta,
+      is.broad = FALSE,
+      pcnt = .5, value = 1, 
+      cell_t = cell_type, region = region, limit = 50
+    )
+  }
+}
+
+# UpSet Plot of overlap by Tissue Type
+Exc_tissues <- list(A1C=NULL,
+                    CgG=NULL,
+                    M1=NULL,
+                    MTG=NULL,
+                    S1=NULL,
+                    V1C=NULL
+)
+for(region in names(Exc)) {
+  # Loop Specific Cell_types
+  for(cell_type in cells) {
+    if( !is.na(Exc[[region]][[cell_type]]) ){
+      Exc_tissues[[region]] <- c(Exc_tissues[[region]], 
+                                 row.names(Exc[[region]][[cell_type]]$exp)
+      )
+      Exc_tissues[[region]] <- 
+        Exc_tissues[[region]][!duplicated(Exc_tissues[[region]] )]
+    }
+  }
+}
+ComplexHeatmap::UpSet( ComplexHeatmap::make_comb_mat(Exc_tissues),
+                       comb_order = order(ComplexHeatmap::comb_size(
+                         ComplexHeatmap::make_comb_mat(Exc_tissues)
+                       )
+                       )
+)
+
+# UpSet Plot of overlap by Cell Types
+for(celltype in cells) {
+  Exc_cell_types <- list(celltype=NULL)
+}
+
+for(celltype in cells) {
+  # Loop Specific Cell_types
+  for(region in names(Exc)) {
+    if( !is.na(Exc[[region]][[celltype]]) ){
+      Exc_cell_types[[celltype]] <- c(Exc_cell_types[[celltype]], 
+                                 row.names(Exc[[region]][[celltype]]$exp)
+      )
+      Exc_cell_types[[celltype]] <- 
+        Exc_cell_types[[celltype]][!duplicated(Exc_cell_types[[celltype]] )]
+    }
+  }
+}
+
+### Make a heatmap of overlap
+genedf <- stack(setNames(Exc_cell_types, nm=names(Exc_cell_types)))
+heatmap_df <- table(genedf[2:1]) %*% t(table(genedf[2:1]))
+heatmap_df <- as.data.frame(heatmap_df)
+
+## normalize to percent overlap
+for(row in 1:dim(heatmap_df)[1]){
+  for(col in 1:dim(heatmap_df)[1]){
+    if(row == col){
+      #if on diagonal value will be one anyways, take row
+      heatmap_df[row,col] <- heatmap_df[row,col] / 
+        length(Exc_cell_types[[row.names(heatmap_df)[row]]])
+    }else{
+      if( row < col ){
+        #closer to row name then normalize by that value
+        heatmap_df[row,col] <- heatmap_df[row,col] / 
+          length(Exc_cell_types[[row.names(heatmap_df)[row]]])
+      }else{
+        #closer to col name then normalize by that value
+        heatmap_df[row,col] <- heatmap_df[row,col] / 
+          length(Exc_cell_types[[colnames(heatmap_df)[col]]])
+      }
+    }
+  }
+}
+
+ComplexHeatmap::Heatmap(heatmap_df)
+
+## Compare to the validation dataset
+vali_filt <- row.names(vali[ vali[ , row.names(cov[cov$cell_type == 'Neuron',])] >1,
+])
+
+table( bm[vali_filt,]$hgnc_symbol %in% Exc_tissues$A1C )
+table( bm[vali_filt,]$hgnc_symbol %in% Exc_tissues$CgG )
+table( bm[vali_filt,]$hgnc_symbol %in% Exc_tissues$M1 )
+table( bm[vali_filt,]$hgnc_symbol %in% Exc_tissues$MTG )
+table( bm[vali_filt,]$hgnc_symbol %in% Exc_tissues$S1 )
+table( bm[vali_filt,]$hgnc_symbol %in% Exc_tissues$V1C )
+
+total_features_exc <- c(Exc_tissues$A1C, Exc_tissues$CgG, Exc_tissues$M1,
+                        Exc_tissues$MTG, Exc_tissues$S1, Exc_tissues$V1C, 
+                        Exc_tissues$CgG
+                      )
+total_features_exc <- total_features_exc[!duplicated(total_features_exc)]
+table( bm[vali_filt,]$hgnc_symbol %in% total_features_exc )
+
+
+#FALSE  TRUE 
+#1202  6206
+table( row.names(micro$exp) %in% bm[names(vali_filt>=1),]$hgnc_symbol )
+
+######################
 
 # Filtering by Broad cell type CPM normalization and Pruning Missing features
 exc <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Exc')
@@ -110,24 +326,35 @@ micro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Micro
 endo <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Endo')
 peri <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Peri')
 
+#_# This can be a named list obj
+#broad_feature_list <-c(rownames(exc$exp), rownames(inh$exp), rownames(unk$exp),
+#                       rownames(astro$exp), rownames(oligo$exp), rownames(opc$exp),
+#                       rownames(micro$exp), rownames(endo$exp), rownames(peri$exp))
+broad_feature_list <- list(
+  'Exc' = rownames(exc$exp), "Inh" = rownames(inh$exp), 'Unk' = rownames(unk$exp), 
+  'Astro' = rownames(astro$exp), 'Oligo' = rownames(oligo$exp), 
+  'OPC' = rownames(opc$exp),'Micro' = rownames(micro$exp), 
+  'Endo' = rownames(endo$exp),'Peri' = rownames(peri$exp)
+)
+#broad_feature_unique <- table(table(broad_feature_list))[1]
+broad_feature_unique <- as.numeric(table(table(unlist(broad_feature_list)))[1])
+#broad_feature_overlap <- table(table(broad_feature_list))[9]
+broad_feature_overlap <- as.numeric(table(table(unlist(broad_feature_list)))[9])
 
-broad_feature_list <-c(rownames(exc$exp), rownames(inh$exp), rownames(unk$exp),
-                       rownames(astro$exp), rownames(oligo$exp), rownames(opc$exp),
-                       rownames(micro$exp), rownames(endo$exp), rownames(peri$exp))
-broad_feature_unique <- table(table(broad_feature_list))[1]
-broad_feature_overlap <- table(table(broad_feature_list))[9]
+#broad_feature_count <- as.data.frame(c(exc$features, inh$features, unk$features, 
+#                                       astro$features, oligo$features, 
+#                                       opc$features, micro$features, 
+#                                       endo$features, peri$features,
+#                                       length(unique(broad_feature_list)) ))
 
+#broad_cell_list <- as.data.frame(c(unique(meta$broad_cell)[-10], 'all_cells'))
+#feature_overview <- cbind(broad_cell_list, broad_feature_count)
+#colnames(feature_overview) <- c('Cell type','Feature count')
 
-broad_feature_count <- as.data.frame(c(exc$features, inh$features, unk$features, 
-                                       astro$features, oligo$features, 
-                                       opc$features, micro$features, 
-                                       endo$features, peri$features,
-                                       length(unique(broad_feature_list)) ))
-
-broad_cell_list <- as.data.frame(c(unique(meta$broad_cell)[-10], 'all_cells'))
-feature_overview <- cbind(broad_cell_list, broad_feature_count)
-colnames(feature_overview) <- c('Cell type','Feature count')
-
+#_# Try not to use spaces it will really mess with code later on
+feature_overview <- data.frame(`Cell type` = names(broad_feature_count),
+                                  `Feature count` = as.character(unlist(broad_feature_count))
+                                )
 
 # Missing feature pruned data pulling from synapse
 # excit_data_rm <- as.data.frame(data.table::fread(
@@ -147,6 +374,7 @@ colnames(feature_overview) <- c('Cell type','Feature count')
 
 
 # Automatically subset by region and missing features removed
+#_# Given the amount of heterogenity across cell type we should re-visit this another way in a while
 mtg <- filter_dat(exp = gene_exp, met = meta, region = 'MTG')
 v1c <- filter_dat(exp = gene_exp, met = meta, region = 'V1C')
 cgg <- filter_dat(exp = gene_exp, met = meta, region = 'CgG')
@@ -176,12 +404,6 @@ a1c <- filter_dat(exp = gene_exp, met = meta, region = 'A1C')
 #   synapser::synGet('syn25986017')$path))[, c(-1,-2)]
 # a1c_data <- as.data.frame(data.table::fread(
 #   synapser::synGet('syn25986018')$path))[, c(-1,-2)]
-
-
-#Combined region analysis for s1 and m1
-s1_comb_analysis <- comb_region(exp = gene_exp, met = meta, 'S1ul', 'S1lm')
-m1_comb_analysis <- comb_region(exp = gene_exp, met = meta, 'M1ul', 'M1lm')
-
 
 # Heatmap of regions
 mtg_mean <- as.data.frame(apply(mtg$exp,1,mean))
