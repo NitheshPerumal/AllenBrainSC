@@ -13,10 +13,14 @@ library(data.table)
 library(parallel)
 library(UpSetR)
 library(psych)
-source("AllenBrainSC/scripts/functions.R")
+
+source("scripts/functions.R")
 
  
 # Load Data --------------------------------------------------------------------
+
+#_# Add Login Step
+synapser::synLogin()
 
 # Metadata for Allen Brain dataset
 #meta <- read.csv("rstudio/metadata.csv",header = TRUE, sep = ',')
@@ -81,6 +85,11 @@ write.csv(regional_subclass, file = 'regional_subclass_eda.csv', quote = FALSE)
 class_sub_rel <- as.data.frame.matrix(xtabs(formula = ~subclass_label+class_label, meta))
 write.csv(class_sub_rel, file = 'class_sub_rel_eda.csv', quote = FALSE)
 
+#_# cell_type_alias_label is the more specific cell type
+# Counts of Narrow Cell Types for Broad Cell Types
+class_sub_rel_2 <- as.data.frame.matrix(xtabs(formula = ~cell_type_alias_label+class_label, meta))
+write.csv(class_sub_rel_2, file = 'class_sub_rel_2_eda.csv', quote = FALSE)
+
 # Counts of the most specific distinction vs other two 
 cell_type <- as.data.frame.matrix(xtabs(formula = ~cell_type_accession_label+class_label, meta))
 cell_type_sub <- as.data.frame.matrix(xtabs(formula = ~cell_type_accession_label+subclass_label, meta))
@@ -98,6 +107,106 @@ write.csv(cell_type_sub, file = 'cell_type_sub_eda.csv', quote = FALSE)
 # Refer to Broad Cell type + Tissue Location + 2 Markers
 # Ex: Astro L1-6 FGFR3 ETNPPL
 
+#_# Move combination Up Here:
+#Combined region analysis for s1 and m1
+s1_comb_analysis <- comb_region(exp = gene_exp, met = meta, 'S1ul', 'S1lm')
+m1_comb_analysis <- comb_region(exp = gene_exp, met = meta, 'M1ul', 'M1lm')
+
+table(meta$region_label)
+meta[ grepl('S1',meta$region_label), ]$region_label <- 'S1'
+meta[ grepl('M1',meta$region_label), ]$region_label <- 'M1'
+table(meta$region_label)
+
+################################################################################
+#_# I'm going to test the per-region filtering compared to not.
+#_# I'm going to use micro-glia becuase there's no sub-type substructure
+micro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, pcnt = .25, value = .1, cell_t = 'Micro')
+
+micro_test <- list(A1C=NULL,
+                   CgG=NULL,
+                   M1=NULL,
+                   MTG=NULL,
+                   S1=NULL,
+                   V1C=NULL
+)
+features <- list()
+total_features <- NULL
+for( region in names(micro_test)) {
+  micro_test[[region]] <- filter_dat(
+    exp = gene_exp, met = meta,
+    is.broad = FALSE,
+    pcnt = .25, value = .1, 
+    cell_t = 'Micro_L1-6_C1QC', region = region
+)
+  features[[region]] <- row.names(micro_test[[region]]$exp)
+  total_features <- c(total_features,row.names(micro_test[[region]]$exp))
+  total_features <- total_features[!duplicated(total_features)]
+}
+ComplexHeatmap::UpSet( ComplexHeatmap::make_comb_mat(features),
+                       comb_order = order(ComplexHeatmap::comb_size(
+                         ComplexHeatmap::make_comb_mat(features)
+                       )
+                      )
+)
+length(total_features)
+# 7408 unique features across 6 tissues
+dim(micro$exp)
+# 5436 Features if we don't look by region
+
+#_# Comp to sorted cells from validation data:
+vali <- read.table(synapser::synGet('syn26275022')$path, 
+                          header = T, sep = '\t'
+                  ) %>%
+  tibble::column_to_rownames('feature') 
+vali <- as.data.frame(edgeR::cpm(as.matrix(vali)))
+
+cov <- read.table(synapser::synGet('syn26275021')$path, 
+                  header = T, sep = '\t'
+) %>%
+  tibble::column_to_rownames('sample')
+
+vali <- vali[ , row.names(cov[cov$cell_type == 'Myeloid',])]
+vali_filt <- apply(vali, 1, mean)
+
+table(vali_filt>=1) 
+# FALSE  TRUE 
+# 11030 14343
+
+#load biomart
+bm <- read.table(synapser::synGet('syn26275023')$path, 
+                   header = T, sep = '\t'
+) %>%
+  tibble::column_to_rownames('ensembl_gene_id')
+
+table( total_features %in% bm[names(vali_filt>=1),]$hgnc_symbol )
+#FALSE  TRUE 
+#1202  6206
+table( row.names(micro$exp) %in% bm[names(vali_filt>=1),]$hgnc_symbol )
+################################################################################
+
+exc <- list(A1C=list(),
+            CgG=list(),
+            M1=list(),
+            MTG=list(),
+            S1=list(),
+            V1C=list()
+)
+features_exc <- list()
+total_features_exc <- NULL
+
+cells <- names(table(meta[meta$broad_cell == 'Exc',]$cell_type_alias_label))
+# Loop Regions names(exc)[]
+for(region in names(exc)) {
+  # Loop Specific Cell_types
+  for(cell_type in cells) {
+    exc[[region]][[cell_type]] <- filter_dat(
+      exp = gene_exp, met = meta,
+      is.broad = FALSE,
+      pcnt = .25, value = .1, 
+      cell_t = 'cell_type', region = region, limit = 50
+    )
+  }
+}
 
 # Filtering by Broad cell type CPM normalization and Pruning Missing features
 exc <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Exc')
@@ -106,9 +215,9 @@ unk <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Unk')
 astro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Astro')
 oligo <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Oligo')
 opc <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'OPC')
-micro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Micro')
+micro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, pcnt = .25, value = .1, cell_t = 'Micro')
 endo <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Endo')
-peri <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Peri')
+peri <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, pcnt = .25, cell_t = 'Peri')
 
 
 broad_feature_list <-c(rownames(exc$exp), rownames(inh$exp), rownames(unk$exp),
@@ -176,12 +285,6 @@ a1c <- filter_dat(exp = gene_exp, met = meta, region = 'A1C')
 #   synapser::synGet('syn25986017')$path))[, c(-1,-2)]
 # a1c_data <- as.data.frame(data.table::fread(
 #   synapser::synGet('syn25986018')$path))[, c(-1,-2)]
-
-
-#Combined region analysis for s1 and m1
-s1_comb_analysis <- comb_region(exp = gene_exp, met = meta, 'S1ul', 'S1lm')
-m1_comb_analysis <- comb_region(exp = gene_exp, met = meta, 'M1ul', 'M1lm')
-
 
 # Heatmap of regions
 mtg_mean <- as.data.frame(apply(mtg$exp,1,mean))
