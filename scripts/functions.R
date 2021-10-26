@@ -24,7 +24,8 @@ prune <- function(x,z) {
 #' @param x datframe of gene expression matrix
 #' @return summary table of median pruning (using prune function)
 #' @return list of total features, and list of features with zeros pruned
-#' @return 3 lists of gene features kept with respective cutoffs 
+#' @return 3 lists of gene features kept with respective cutoffs
+
 cutoff_summ <- function(x) {
   
   bp <- nrow(x)
@@ -61,6 +62,7 @@ cutoff_summ <- function(x) {
 #' Summary of Median Cutoffs for many cells
 #' @param x list of objects to pass for cutoff analysis
 #' @return summary table of median pruning
+
 cutoff_analysis <- function(cell_list) {
   bp_names <<- c() 
   z_names <<- c()
@@ -104,6 +106,7 @@ cutoff_analysis <- function(cell_list) {
 #' @param x datframe of gene expression matrix
 #' @param z numeric value for threshold of CPM cutoff
 #' @return pruned dataframe of gene expression matrix with missing features removed
+
 quant <- function(x,z) {
   count <- as.data.frame(t(as.data.frame(apply(x,1, 
                                                function(x) unname(quantile(x, c(.75))) 
@@ -117,6 +120,7 @@ quant <- function(x,z) {
 #' Summary of Quantile Cutoffs for many cells
 #' @param x list of objects to pass for quantile analysis
 #' @return summary table of quantile pruning
+
 quant_analysis <- function(cell_list) {
   quant_0.1_names <<- c()
   quant_0.5_names <<- c()
@@ -154,6 +158,7 @@ quant_analysis <- function(cell_list) {
 #' @param x datframe of gene expression matrix
 #' @return dataframe with summary
 #' @return 3 lists of gene features kept with respective cutoffs
+
 quant_summ <- function(x) {
   
   quant_0.1 <- quant(x,0.1)
@@ -183,6 +188,7 @@ quant_summ <- function(x) {
 #' Function to find summary stats of every feature
 #' @param x dataframe of gene matrix to generate summary statistics for
 #' @return out dataframe of summary statistics
+
 stats <- function(x) {
   
   wm <- as.data.frame(apply(x, 1, function(x) log2(mean(winsor(x, trim = 0.05, na.rm = TRUE)))))
@@ -225,6 +231,7 @@ stats <- function(x) {
 #' @examples 
 #' example <- c('abc', 'a b c', 'a  b   c', '    ab c ', '', '  ')
 #' rep_space( input=example, repchar='_' )
+
 rep_space <- function( input, repchar='_' ){
   #Clean leading spaces
   output <- trimws(input,which = c("both"),whitespace = "[ \t\r\n]")
@@ -486,10 +493,10 @@ comb_region <- function(exp, met, region1_name, region2_name){
 #' expression matrix for the subset after quantile pruning of 25% 
 #' (list$feature_name) or (list$exp_matrix)
 #' 
-#' @export 
+#' @export
 
-prune_quant <- function(exp, met, region, is.specific = NULL,
-                        result = c('feature_name','exp_matrix')) {
+prune_quant <- function(exp, met, region, is.specific,
+                       result = c('feature_name','exp_matrix')) {
   if (missing(exp)) {
     stop(paste0('Must specify expression matrix'))
   }
@@ -502,89 +509,64 @@ prune_quant <- function(exp, met, region, is.specific = NULL,
   if (missing(is.specific)) {
     stop(paste0('Must specify is.specific with boolean value'))
   }
+  if (is.specific != TRUE && is.specific != FALSE) {
+    stop(paste0('Must specify is.specific with boolean value'))
+  }
   if (result != 'feature_name' && result != 'exp_matrix') {
     stop(paste0('Result must be either feature_name or exp_matrix'))
   }
   
+  ncores <- as.numeric(detectCores() - 1)
   
-  broad_cell_list <- unique(met$broad_cell)[-10] #not enough VLMC cells
+  broad_cell_list <- unique(met$broad_cell)[-c(8,9,10)] #not enough Peri,Endo,VLMC cells
   
-  output_list <- c()
-  spec_list <- c()
-  if (result == 'feature_name') {
-    if(is.specific == FALSE){
-      for (i in broad_cell_list) {
-        data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1,
-                           region = region, is.broad = TRUE, cell_t = i)
-        command <- paste0(
-          'output_list <- c(output_list,"', i,'"= list(rownames(quant(data$exp,0.5))))'
-        )
-        eval(parse(text=command))
-      }
-      
-      }else{
-
+  out_list <- c()
+  if (is.specific == TRUE) { # is.specific = TRUE 
     for (i in broad_cell_list) {
-      data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
-                         region = region, is.broad = TRUE, cell_t = i)
       
-      for (j in unique(data$met$cell_type_alias_label)) {
-            
-        data_sub <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
-                              is.broad = FALSE, cell_t = j)
+      region_met <- met[met$region_label == region,]
+      broad_met <- region_met[region_met$broad_cell == i,]
+      spec_cell <- unique(broad_met$cell_type_alias_label)[unique(table(broad_met$cell_type_alias_label) >= 50)]
         
-        command <- paste0(
-          'spec_list <- c(spec_list,"', j,'"= list(rownames(quant(data_sub$exp,0.5))))'
-        )
-        eval(parse(text=command))
-        }
       
-        command1 <- paste0(
-        'output_list <- c(output_list,"', i,'"= list(spec_list))'
-        )
-        eval(parse(text=command1))
+      spec_filt <- mclapply(spec_cell, function(x)
+        filter_dat(exp = exp, met = met, 
+                   pcnt = 0.75, value = 1, 
+                   region = region, is.broad = FALSE, 
+                   cell_t = x)$exp,
+        mc.cores = ncores 
+      )
+      
+      if (result == 'feature_name') {
+        spec_filt <- mclapply(spec_filt, mc.cores = ncores, rownames)
       }
-    }
-  }else{
-  
-    if (is.specific == FALSE) {
-      for (i in broad_cell_list) {
-        data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1,
-                           region = region, is.broad = TRUE, cell_t = i)
-        command <- paste0(
-          'output_list <- c(output_list,"', i,'"= list(quant(data$exp,0.5)))'
-        )
-        eval(parse(text=command))
       
-      }
-    }else{
-    
-      for (i in broad_cell_list) {
-        data <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
-                           region = region, is.broad = TRUE, cell_t = i)
+      names(spec_filt) <- spec_cell
       
-        for (j in unique(data$met$cell_type_alias_label)) {
-        
-         data_sub <- filter_dat(exp = exp, met = met, pcnt = 0.5, value = 1, 
-                                is.broad = FALSE, cell_t = j)
-         
-            command <- paste0(
-              'spec_list <- c(spec_list,"', j,'"= list(quant(data_sub$exp,0.5)))'
-            )
-            eval(parse(text=command))
-        }
-      
-
       command1 <- paste0(
-        'output_list <- c(output_list,"', i,'"= list(spec_list))'
+        'out_list <- c(out_list,"', i,'"= list(spec_filt))'
       )
       eval(parse(text=command1))
-      }
     }
+  }else{ # is.specific = FALSE
+    
+      spec_filt <- mclapply(broad_cell_list, function(x)
+        filter_dat(exp = exp, met = met, 
+                  pcnt = 0.75, value = 1, 
+                  region = region, is.broad = TRUE, 
+                  cell_t = x)$exp,
+        mc.cores = ncores 
+      )
+    
+      if (result == 'feature_name') {
+        spec_filt <- mclapply(spec_filt, mc.cores = ncores, rownames)
+      }
+    
+      out_list <- c(out_list, spec_filt)
+      names(out_list) <- c(broad_cell_list)
   }
   
-  return(output_list)
-  
+  return(out_list)
 }
 
 
@@ -595,7 +577,6 @@ prune_quant <- function(exp, met, region, is.specific = NULL,
 #'  @param met meta data for expression matrix
 #'  @param region region for analysis
 #'  @return list object with specific cell type vectors for each broad cell type 
-
 
 third_quart <- function(exp, met, region) {
   

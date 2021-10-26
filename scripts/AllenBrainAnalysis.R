@@ -13,8 +13,16 @@ library(data.table)
 library(parallel)
 library(UpSetR)
 library(psych)
-source("AllenBrainSC/scripts/functions.R")
+source("AllenBrainSC/scripts/functions.R") 
+library('usethis')
+library('testthat')
 
+# Logging into Synapse
+#synLogin(auth ='')
+
+# Setting up testing enviornment
+#usethis::proj_set(path = '/home/nperumal/AllenBrainSC/scripts')
+#usethis::use_test('test_functions')
  
 # Load Data --------------------------------------------------------------------
 
@@ -241,6 +249,7 @@ s1_spec_feature_list <- prune_quant(exp = gene_exp, met = meta, region = c('S1lm
 
 a1c_spec_feature_list <- prune_quant(exp = gene_exp, met = meta, region = 'A1C', 
                                      is.specific = TRUE, result ='feature_name')
+
 
 
 # Third quartile and mean of third quart for each broad cell type
