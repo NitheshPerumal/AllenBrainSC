@@ -4,6 +4,7 @@
 
 # Libraries --------------------------------------------------------------------
 
+library(plyr)
 library(tidyverse)
 library(synapser)
 library(mclust)
@@ -13,6 +14,8 @@ library(data.table)
 library(parallel)
 library(UpSetR)
 library(psych)
+library(snpStats)
+library(GenomicTools.fileHandler)
 source("AllenBrainSC/scripts/functions.R") 
 library('usethis')
 library('testthat')
@@ -54,6 +57,8 @@ meta$broad_cell[is.na(meta$broad_cell)] <- 'Unk'
 meta[ is.na(meta$cell_type_alias_label),]$cell_type_alias_label <- 
   meta[ is.na(meta$cell_type_alias_label),]$outlier_type
 
+# Removing Peri, Endo, VLMC rows due to not enough cell types
+meta <- meta[!meta$broad_cell %in% c('Peri','Endo','VLMC'),]
 
 # Gene expression Matrix
 #gene_exp <- read.csv("rstudio/matrix.csv", sep = ',')
@@ -72,7 +77,7 @@ gene_exp <- as.data.frame(t(gene_exp))
 gene_exp <- gene_exp[ rowSums(gene_exp != 0) > 0,] 
 
 
-# Initial EDA ------------------------------------------------------------------
+# Initial EDA -----------------------------------------------------------------
 
 # Some Exploratory Analysis used to determine how to distinguish cell types
 # Counts of Broad Cell Types based on Brain Region
@@ -115,24 +120,21 @@ astro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Astro
 oligo <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Oligo')
 opc <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'OPC')
 micro <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Micro')
-endo <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Endo')
-peri <- filter_dat(exp = gene_exp, met = meta, is.broad = TRUE, cell_t = 'Peri')
 
 
 broad_feature_list <-c(rownames(exc$exp), rownames(inh$exp), rownames(unk$exp),
                        rownames(astro$exp), rownames(oligo$exp), rownames(opc$exp),
-                       rownames(micro$exp), rownames(endo$exp), rownames(peri$exp))
+                       rownames(micro$exp))
 broad_feature_unique <- table(table(broad_feature_list))[1]
-broad_feature_overlap <- table(table(broad_feature_list))[9]
+broad_feature_overlap <- table(table(broad_feature_list))[7]
 
 
 broad_feature_count <- as.data.frame(c(exc$features, inh$features, unk$features, 
                                        astro$features, oligo$features, 
                                        opc$features, micro$features, 
-                                       endo$features, peri$features,
-                                       length(unique(broad_feature_list)) ))
+                                       length(unique(broad_feature_list))))
 
-broad_cell_list <- as.data.frame(c(unique(meta$broad_cell)[-10], 'all_cells'))
+broad_cell_list <- as.data.frame(c(unique(meta$broad_cell), 'all_cells'))
 feature_overview <- cbind(broad_cell_list, broad_feature_count)
 colnames(feature_overview) <- c('Cell type','Feature count')
 
@@ -233,22 +235,28 @@ broad_cell_quant_analysis <- quant_analysis(cell_type_list)
 
 # List of feature name/exp matrix for cell types by tissue type
 mtg_spec_feature_list <- prune_quant(exp = gene_exp, met = meta, region = 'MTG', 
-                                     is.specific = TRUE, result ='feature_name')
+                                     is.specific = TRUE, result ='feature_name',
+                                     cell_pop_size = 50)
 
 v1c_spec_feature_list <- prune_quant(exp = gene_exp, met = meta, region = 'V1C', 
-                                     is.specific = TRUE, result ='feature_name')
+                                     is.specific = TRUE, result ='feature_name',
+                                     cell_pop_size = 50)
 
 cgg_spec_feature_list <- prune_quant(exp = gene_exp, met = meta, region = 'CgG', 
-                                     is.specific = TRUE, result ='feature_name')
+                                     is.specific = TRUE, result ='feature_name',
+                                     cell_pop_size = 50)
 
 m1_spec_feature_list <- prune_quant(exp = gene_exp, met = meta, region = c('M1lm','M1ul'), 
-                                     is.specific = TRUE, result ='feature_name')
+                                    is.specific = TRUE, result ='feature_name',
+                                    cell_pop_size = 50)
 
 s1_spec_feature_list <- prune_quant(exp = gene_exp, met = meta, region = c('S1lm','S1ul'), 
-                                    is.specific = TRUE, result ='feature_name')
+                                    is.specific = TRUE, result ='feature_name',
+                                    cell_pop_size = 50)
 
 a1c_spec_feature_list <- prune_quant(exp = gene_exp, met = meta, region = 'A1C', 
-                                     is.specific = TRUE, result ='feature_name')
+                                     is.specific = TRUE, result ='feature_name',
+                                     cell_pop_size = 50)
 
 
 
@@ -267,6 +275,7 @@ cgg_mean_quant <- mean_quant(cgg_third_quart)
 m1_mean_quant <- mean_quant(m1_third_quart)
 s1_mean_quant <- mean_quant(s1_third_quart)
 a1c_mean_quant <- mean_quant(a1c_third_quart)
+
 
 # mtg_feature_summ <- feature_summ(mtg_mean_quant, is.length = TRUE)
 # v1c_feature_summ <- feature_summ(v1c_mean_quant, is.length = TRUE)
@@ -290,9 +299,11 @@ s1_feature_summ <- feature_summ(s1_mean_quant)
 a1c_feature_summ <- feature_summ(a1c_mean_quant)
 
 
+# Issue with ups_feature_summ where rownames are being doubled?
+# Also need to deal with 0's in the input data since those dont
+# have any rownames
 ups_feature_summ <- as.data.frame(rownames(gene_exp))
-ups_feature_summ <- column_to_rownames(ups_feature_summ, var = 'rownames(gene_exp)')
-for (i in unique(meta$broad_cell)[-10]) {
+for (i in unique(meta$broad_cell)) {
   command <- paste0('hist_list <- c(mtg_feature_summ$',i, ',v1c_feature_summ$',i,
                     ',cgg_feature_summ$',i, ',m1_feature_summ$',i,
                     ',s1_feature_summ$',i, ',a1c_feature_summ$',i,')')
@@ -316,29 +327,63 @@ upset(ups_feature_summ, sets = names(ups_feature_summ),
       mainbar.y.label = 'Feature Overlap by Cells', 
       sets.x.label = 'Broad Cell Type') 
 
-ups_feature_summ <- as.data.frame(ups_feature_summ)
+#ups_feature_summ <- rownames_to_column(ups_feature_summ, 'feature_name')
 
-#ups_13_feat <- rownames(ups_feature_summ[apply(ups_feature_summ, 1, sum) == 4,])
-
-
-cells <- c('Endo', 'Micro', 'Peri', 'OPC')
-for (i in cells) {
-    
-  command <- paste0('
-  hist_dat <- cbind(
-    as.data.frame(mtg_mean_quant$',i,'[ups_13_feat], ups_13_feat),
-    as.data.frame(a1c_mean_quant$',i,'[ups_13_feat], ups_13_feat),
-    as.data.frame(v1c_mean_quant$',i,'[ups_13_feat], ups_13_feat),
-    as.data.frame(m1_mean_quant$',i,'[ups_13_feat], ups_13_feat),
-    as.data.frame(s1_mean_quant$',i,'[ups_13_feat], ups_13_feat),
-    as.data.frame(cgg_mean_quant$',i,'[ups_13_feat], ups_13_feat)
-  )')
-  
-  eval(parse(text=command))
-    
-  hist_in <- apply(hist_dat, 1, function(x) mean(x, na.rm = TRUE))
-  hist(hist_in, breaks = 13, main = i)
+# Validation data set
+gtf_to_bm <- function(gtfID, feature_list) {
+  gtf <- synapser::synGet(gtfID)
+  biom <- GenomicTools.fileHandler::importGTF(file=gtf$path,
+                                              level= 'gene',
+                                              features=feature_list)
+  as.data.frame(biom) %>%
+    select(which(names(biom) %in% feature_list)) %>%
+    return()
 }
+
+allen_gtf <- gtf_to_bm('syn26434482', c('gene_id','gene_symbol','transcript_id'))
+colnames(allen_gtf)[2] <- 'gene_name'
+main_gtf <- gtf_to_bm('syn20692159', c('gene_id','gene_name','gene_type'))
+colnames(main_gtf)[1] <- 'ensemb_id'
+
+allen_ensemb_table <- join(allen_gtf, main_gtf, by = 'gene_name', type = 'inner')
+
+
+vali <- read.table(synapser::synGet('syn26275022')$path, 
+                   header = T, sep = '\t'
+) %>%
+  tibble::column_to_rownames('feature')
+vali <- as.data.frame(edgeR::cpm(as.matrix(vali)))
+
+cov <- read.table(synapser::synGet('syn26275021')$path, 
+                  header = T, sep = '\t'
+)
+#%>%
+#  tibble::column_to_rownames('sample')
+colnames(cov)[1] <- 'sample_name'
+colnames(cov)[4] <- 'broad_cell'
+
+# Histogram of Ages in the validation dataset
+hist(cov$age, xlab = 'Age of donor', main = 'Ages', breaks = 12)
+
+# Gender differences
+barplot(height = c(length(cov$sex[cov$sex == 'Male']),length(cov$sex[cov$sex == 'Female'])),
+        names = c('Male','Female'))
+
+
+astro_val <- filter_dat(exp = vali, met = cov, is.broad = TRUE, pcnt = 0.75, 
+                        value = 1, cell_t = 'Astrocyte')
+
+oligo_val <- filter_dat(exp = vali, met = cov, is.broad = TRUE, pcnt = 0.75, 
+                        value = 1, cell_t = 'Oligodendrocyte')
+
+neuron_val <- filter_dat(exp = vali, met = cov, is.broad = TRUE, pcnt = 0.75, 
+                         value = 1, cell_t = 'Neuron')
+
+vali_filt <- vali[ , row.names(cov[cov$cell_type == 'Astrocyte',])]
+vali_filt <- apply(vali_filt, 1, mean)
+
+table(vali_filt>=1) 
+
 
 
 # Generating summary statistics 

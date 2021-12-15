@@ -495,7 +495,7 @@ comb_region <- function(exp, met, region1_name, region2_name){
 #' 
 #' @export
 
-prune_quant <- function(exp, met, region, is.specific,
+prune_quant <- function(exp, met, region, is.specific, cell_pop_size,
                        result = c('feature_name','exp_matrix')) {
   if (missing(exp)) {
     stop(paste0('Must specify expression matrix'))
@@ -515,19 +515,25 @@ prune_quant <- function(exp, met, region, is.specific,
   if (result != 'feature_name' && result != 'exp_matrix') {
     stop(paste0('Result must be either feature_name or exp_matrix'))
   }
+  if (missing(cell_pop_size)) {
+    stop(paste0('Specify a minimum population size to keep'))
+  }
   
   ncores <- as.numeric(detectCores() - 1)
   
-  broad_cell_list <- unique(met$broad_cell)[-c(8,9,10)] #not enough Peri,Endo,VLMC cells
+  broad_cell_list <- unique(met$broad_cell)
   
   out_list <- c()
   if (is.specific == TRUE) { # is.specific = TRUE 
     for (i in broad_cell_list) {
       
-      region_met <- met[met$region_label == region,]
+      region_met <- met[met$region_label %in% region,]
       broad_met <- region_met[region_met$broad_cell == i,]
-      spec_cell <- unique(broad_met$cell_type_alias_label)[unique(table(broad_met$cell_type_alias_label) >= 50)]
-        
+      spec_list_tot <- broad_met$cell_type_alias_label
+      spec_count <- as.data.frame(table(spec_list_tot))
+      spec_prune <- spec_count[spec_count$Freq >= cell_pop_size, ]
+      spec_cell <- as.vector(spec_prune[,1])
+      
       
       spec_filt <- mclapply(spec_cell, function(x)
         filter_dat(exp = exp, met = met, 
@@ -585,22 +591,30 @@ third_quart <- function(exp, met, region) {
   # Region subset
   met_region <- met[met$region_label %in% region,]
   
-  # Remove any specific cell types with less than 50 cells
-  specific_n_50 <- met_region$cell_type_alias_label[table(met_region$cell_type_alias_label) >= 50]
-  met_dat <- met_region[met_region$cell_type_alias_label %in% specific_n_50,]
-  
-  broad_cell_list <- unique(met$broad_cell)[-c(8,9,10)] #not enough Peri, Endo, or VLMC cells
+  broad_cell_list <- unique(met$broad_cell)
   
   out_list <- c()
   for (i in broad_cell_list) {
     
     # Specific cell list by broad cell type with more than 50 samples
-    broad_met <- met_dat[met_dat$broad_cell == i,]
-    spec_cell <- unique(broad_met$cell_type_alias_label)
+    broad_met <- met_region[met_region$broad_cell == i,]
+    specific_cell_list <- broad_met$cell_type_alias_label
     
+    spec_cell <- names(table(specific_cell_list)[ table(specific_cell_list) >= 50 ])
+    input_met <- broad_met[specific_cell_list %in% spec_cell,]
+    
+    if (nrow(input_met) == 0) {
+      command1 <- paste0(
+        'out_list <- c(out_list,"', i,'"= as.numeric(0))'
+      )
+      eval(parse(text=command1))
+
+      next
+    }
+
     # Specific cell list expression matrix 
     spec_filt <- mclapply(spec_cell, function(x)
-      filter_dat(exp = exp, met = broad_met, 
+      filter_dat(exp = exp, met = input_met, 
                  pcnt = 0.5, value = 1, 
                  region = region, is.broad = FALSE, 
                  cell_t = x)$exp,
@@ -672,7 +686,7 @@ feature_summ <- function(list_obj, is.length = FALSE) {
   tot_features <- lapply(list_obj, function(x) unname(names(x)))
   tot_features_unlist <- unlist(tot_features)
   
-  overlap <- unname(tot_features_unlist[table(tot_features_unlist) == 9])
+  overlap <- unname(tot_features_unlist[table(tot_features_unlist) == 7])
   tot_features$tissue_overlap <- unique(overlap)
   
   unique_feat <- unname(tot_features_unlist[table(tot_features_unlist) == 1])
